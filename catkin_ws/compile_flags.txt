@@ -1,0 +1,9 @@
+-xc++
+-I
+/opt/ros/melodic/include/
+-I
+./devel/include/
+-Wall
+-Wextra
+-I
+./src/clips_ros/src/

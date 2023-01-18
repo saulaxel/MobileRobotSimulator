@@ -121,7 +121,7 @@ int stop()
     return 1;
 }
 
-bool object_interaction(int action, char name[50])
+bool object_interaction(int action, const char name[50])
 {
     ros::NodeHandle n;
     ros::ServiceClient client;
@@ -393,7 +393,7 @@ void laserCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
             lasers[j] = float( msg->ranges[j] );
         }
     }
-    
+
 
 
 }
@@ -511,7 +511,7 @@ void check_collision(float theta ,float distance ,int new_simulation,float *fina
         ROS_ERROR("Failed to call service simulator_base");
     }
 
-  
+
 }
 
 
