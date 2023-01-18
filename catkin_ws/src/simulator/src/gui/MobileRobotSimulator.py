@@ -1878,24 +1878,31 @@ class MobileRobotSimulator(threading.Thread):
         self.entryNumTests	= Entry(self.errorMenu  ,width = 8	   , background = self.entrybackgroudColor ,foreground = self.entryforegroundColor)
         self.labelMeanVal	 = Label(self.errorMenu  ,text = "" , background = self.backgroundColor ,font = self.lineFont)
         self.labelVarianceVal = Label(self.errorMenu  ,text = "" , background = self.backgroundColor ,font = self.lineFont)
-        self.buttonTestError  = Button(self.errorMenu ,width = 20	  , text = "Start tests", foreground = self.buttonFontColor ,background = self.buttonColor, font = self.buttonFont, command = lambda: True )
+        self.buttonTestError  = Button(self.errorMenu ,width = 20	  , text = "Start tests", foreground = self.buttonFontColor ,background = self.buttonColor, font = self.buttonFont, command = self.error_tests)
+
+        self.canvasFunction = Canvas(self.errorMenu, width=300, height=300,
+                                      bg=self.canvasColor)
+        self.canvasError    = Canvas(self.errorMenu, width=300, height=300,
+                                     bg=self.canvasColor)
 
         self.entryNumTests   .insert ( 0, '10')
 
         self.errorTable = []
 
         table_headers = ('Expected', 'Real')
-        table_data = np.array(
-            [[1.0, 1.1],
-             [2.0, 2.1],
-             [3.0, 3.1],
-             [4.0, 4.1],
-             [5.0, 5.1]]
+        # A gui table is created with the right size to accommodate this data,
+        # so adding rows or columns will make the table grow larger
+        table_default_data = np.array(
+            [[0.0, 0.0],
+             [0.0, 0.0],
+             [0.0, 0.0],
+             [0.0, 0.0],
+             [0.0, 0.0]]
         )
 
-        mean, var = calculate_errors(table_data)
-        self.labelMeanVal.config(text = '{:.3f}'.format(mean))
-        self.labelVarianceVal.config(text = '{:.3f}'.format(var))
+        self.table_data = np.zeros((0, 2))
+
+        self.set_error_labels(table_default_data)
 
         elabel_col = 0
         elabel_row = 0
@@ -1907,32 +1914,39 @@ class MobileRobotSimulator(threading.Thread):
         self.labelNumTests.grid(column = elabel_col, row = elabel_row + 1, sticky = (N, W), padx = (5,5))
         self.labelMean	.grid(column = elabel_col, row = elabel_row + 2, sticky = (N, W), padx = (5,5))
         self.labelVariance.grid(column = elabel_col, row = elabel_row + 3, sticky = (N, W), padx = (5,5))
+        self.buttonTestError  .grid(column = elabel_row, row = elabel_row + 5, sticky = (N, W), padx = (5,5))
 
         self.entryNumTests	.grid(column = elabel_row + 1, row = elabel_row + 1, sticky = (N, W), padx = (5,5))
         self.labelMeanVal	 .grid(column = elabel_row + 1, row = elabel_row + 2, sticky = (N, W), padx = (5,5))
         self.labelVarianceVal .grid(column = elabel_row + 1, row = elabel_row + 3, sticky = (N, W), padx = (5,5))
-        self.buttonTestError  .grid(column = elabel_row + 1, row = elabel_row + 4, sticky = (N, W), padx = (5,5))
+
+        ec_row = 6
+        ec_col = 0
+        self.canvasFunction .grid(column = ec_col, row = ec_row,
+                                   rowspan = 10,
+                                   columnspan = 2,
+                                   sticky = (N, W), padx = (5, 5))
+        self.canvasError    .grid(column = ec_col + 2,
+                                   row = ec_row,
+                                   rowspan = 10,
+                                   columnspan = 3,
+                                   sticky = (N, W), padx = (5, 5))
+
 
         # Build a table for expected vs real value
         etable_col = elabel_col + 3
         etable_row = elabel_row
 
-        header = []
-        # Place the header of the table
-        for i, htext in enumerate(table_headers):
-            l = self.label_headline(self.errorMenu, text = htext)
-            l.grid(column = etable_col + i, row = etable_row, sticky = (N, W), padx = (5,5))
-            header.append(l)
 
+        theaders, tcells = \
+            self.table(parent = self.errorMenu,
+                       table_headers = table_headers,
+                       default_data = table_default_data,
+                       start_col = etable_col,
+                       start_row = etable_row)
 
-        self.errorTable.append(header)
-
-        # Place the last rows of data into the table using reverse order
-        rows_to_show = 4
-        for j, tline in enumerate(table_data[-1:-rows_to_show - 1:-1]):
-            for i, col in enumerate(tline):
-                l = self.label_line(self.errorMenu, text = col)
-                l.grid(column = etable_col + i, row = etable_row + 1 + j, sticky = (N, W), padx = (5,5))
+        self.errorTableHeaders = theaders
+        self.errorTableCells   = tcells
 
 
     def label_line(self, parent, text):
@@ -1945,6 +1959,110 @@ class MobileRobotSimulator(threading.Thread):
                      background = self.backgroundColor,
                      foreground = self.titlesColor,
                      font = self.headLineFont)
+
+
+    def table(self, parent, table_headers, default_data, start_row, start_col):
+
+        theaders = []
+        # Place the header of the table
+        for i, htext in enumerate(table_headers):
+            l = self.label_headline(self.errorMenu, text = htext)
+            l.grid(column = start_col + i, row = start_row, sticky = (N, W), padx = (5,5))
+            theaders.append(l)
+
+
+        # Place the last rows of data into the table using reverse order
+        tcells = []
+        for j, row_data in enumerate(default_data):
+            row = []
+            for i, cell_data in enumerate(row_data):
+                l = self.label_line(self.errorMenu, text = cell_data)
+                l.grid(column = start_col + i, row = start_row + 1 + j, sticky = (N, W), padx = (5,5))
+                row.append(l)
+            tcells.append(row)
+
+        return theaders, tcells
+
+    def fill_table(self, cells, data):
+        rows = len(cells)
+        cols = len(cells[0])
+
+        for i, row in enumerate(cells):
+            for j, cell in enumerate(row):
+                t = data[-i - 1, j] # Takes "data" in reverse order, last errors first
+                cell.config(text = t)
+
+
+
+    def error_tests(self):
+        self.table_data = np.array([
+            [-1.0, -.6],
+            [0.0, -.1],
+            [1.0, 1.1],
+            [2.0, 1.95],
+            [3.0, 3.47],
+            [4.0, 4.02],
+            [5.0, 4.7],
+            [6.0, 7.18]
+        ])
+
+        self.fill_table(self.errorTableCells, self.table_data)
+        self.set_error_labels(self.table_data)
+        self.plot_function_and_error(self.table_data)
+
+
+    def set_error_labels(self, data):
+        mean, var = calculate_errors(data)
+        self.labelMeanVal.config(text = '{:.3f}'.format(mean))
+        self.labelVarianceVal.config(text = '{:.3f}'.format(var))
+
+
+    def plot_function_and_error(self, data):
+        self.resetCanvas(self.canvasFunction)
+
+
+        self.plot_in_canvas(self.canvasFunction,
+                            colors=('magenta', 'blue'),
+                            functions=(data[:, 0], data[:, 1]))
+
+        self.resetCanvas(self.canvasError)
+        err = data[:, 0] - data[:, 1]
+        self.plot_in_canvas(self.canvasError,
+                            colors=('red',),
+                            functions=(err,))
+
+
+    def plot_in_canvas(self, canvas, functions, colors):
+        canvas_size = 300
+        min_val = float('inf')
+        max_val = float('-inf')
+        for f in functions:
+            min_val = min(min_val, np.min(f))
+            max_val = max(max_val, np.max(f))
+
+
+        # Reference Axis
+        y0 = canvas_size - (0 - min_val) * canvas_size / (max_val - min_val)
+        canvas.create_line(0, y0, canvas_size, y0)
+
+
+        for f, color in zip(functions, colors):
+            length = len(f)
+
+            # Values
+            for (i, val1), val2 in zip(enumerate(f), f[1:]):
+                x1 = i * canvas_size / (length - 1)
+                x2 = (i + 1) * canvas_size / (length - 1)
+
+                y1 = canvas_size - (val1 - min_val) * canvas_size / (max_val - min_val)
+                y2 = canvas_size - (val2 - min_val) * canvas_size / (max_val - min_val)
+
+                canvas.create_line(x1, y1, x2, y2, fill=color)
+
+
+
+    def resetCanvas(self, canvas):
+        canvas.delete('all')
 
 
 
