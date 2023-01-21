@@ -1,0 +1,8 @@
+En gui/MobileRobotSimulator.py/get_parameters(), razón de la multiplicación por
+mapX tanto en el parámetro X como en Y
+    parameters.append(self.robotX*self.mapX / self.canvasX  )
+    parameters.append( self.mapY  - (self.robotY)*self.mapX / self.canvasY )
+
+Lo mismo pasa en gui/MobileRobotSimulator.py/plot_robot()
+    self.entryPoseX.insert ( 0, str(float(x)*self.mapX / self.canvasX) )
+    self.entryPoseY.insert ( 0, str(self.mapY  - (float(y)*self.mapX / self.canvasY )  ))

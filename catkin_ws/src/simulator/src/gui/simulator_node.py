@@ -8,7 +8,7 @@ from simulator.msg import PosesArray
 from simulator.msg import poseCustom
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
-from tf.transformations import euler_from_quaternion 
+from tf.transformations import euler_from_quaternion
 import tf
 import time
 import rospy
@@ -47,7 +47,7 @@ def turtle_odometry(msg):
 	yaw = euler[2]
 	gui.handle_turtle(msg.pose.pose.position.x,msg.pose.pose.position.y,yaw)
 	#msg.pose.pose.position
-	
+
 def handle_simulator_object_interaction(req):
 	print(req)
 	resp = simulator_object_interactionResponse()
@@ -150,12 +150,12 @@ def battery_charge():
 		gui.batteryBar['value'] = get_batt_perc().batt_percentage
 	except rospy.ServiceException as e:
 		gui.batteryBar['value'] = 0
-	
+
 def battery_advertise(message, color):
 	gui.labelBattAdvertise.grid_forget()
 	gui.labelBattAdvertise.config( text = message , bg = color )
 	gui.labelBattAdvertise.grid(column = 4 ,row = 22 ,sticky = (N, W) ,padx = (10,5))
-	
+
 def get_params():
 	global battery_low, battery_charging
 	if rospy.has_param('/battery_low'):
@@ -171,7 +171,7 @@ def ros():
 	c = rospy.Service('simulator_stop', simulator_stop, handle_simulator_stop)
 	d = rospy.Service('simulator_set_light_position', simulator_set_light_position, handle_simulator_set_light_position)
 	e = rospy.Service('simulator_object_interaction', simulator_object_interaction, handle_simulator_object_interaction)
-	
+
 	#rospy.Subscriber('/scan',LaserScan,update_value,queue_size=1)
 	#rospy.Subscriber('/odom',Odometry, turtle_odometry ,queue_size=1)
 	rospy.Subscriber('/robotPoseByAruco',PoseStamped, handlePoseByAruco ,queue_size=1)
@@ -181,7 +181,7 @@ def ros():
 	lights_pub = rospy.Publisher("/turn_lights", Int8MultiArray, queue_size=5)
 	move_pub   = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
 
-	
+
 	x = 0.0
 	y = 0.0
 	th = 0.0
@@ -203,7 +203,7 @@ def ros():
 
 	msg_params = Parameters()
 	rate = rospy.Rate(100)
-	
+
 
 	start = time.time()
 	labelColor = gui.warnLightColor
@@ -214,7 +214,7 @@ def ros():
 		robot_selected = rospy.get_param("/robot_selected")
 
 	gui.labelRobot = Label(gui.rightMenu ,text = "Robot: " + robot_selected, background = gui.backgroundColor, foreground = gui.titlesColor ,font = gui.headLineFont )
-	gui.labelRobot.grid(column = 4 ,row = 0 ,sticky = (N, W) ,padx = (5,5))    
+	gui.labelRobot.grid(column = 4 ,row = 0 ,sticky = (N, W) ,padx = (5,5))
 
 	while not gui.stopped:
 		parameters = gui.get_parameters()
@@ -253,7 +253,7 @@ def ros():
 			current_time,
 			"base_link_rob2w",
 			"map"
-			
+
 		)
 
 		odom = Odometry()
@@ -265,17 +265,17 @@ def ros():
 		odom_pub.publish(odom)
 
 
-		objPose_pub.publish(convertArray2Pose(gui.objects_data))		   
-		
+		objPose_pub.publish(convertArray2Pose(gui.objects_data))
+
 		if lights_array != [parameters[19], parameters[20]]:
 			lights_array = [parameters[19], parameters[20]]
 			turn_lights(lights_array)
-		
+
 		if last_movement != parameters[21]:
 			publish_movement(parameters[21])
 			last_movement = parameters[21]
 			gui.movement = [0, 0, 0, 0]
-		
+
 		if(gui.isRunning is False):
 			battery_charge()
 
@@ -284,9 +284,9 @@ def ros():
 
 		get_params()
 		end = time.time()
-		
+
 		if(end - start > 0.5):
-			start = time.time()	
+			start = time.time()
 			if battery_charging:
 				if labelColor == gui.warnLightColor:
 					labelColor = gui.warnStrongColor
@@ -294,7 +294,7 @@ def ros():
 					labelColor = gui.warnLightColor
 
 				battery_advertise('Battery charging...', labelColor)
-		
+
 			elif battery_low:
 				if labelColor == gui.errorLightColor:
 					labelColor = gui.errorStrongColor
@@ -302,11 +302,11 @@ def ros():
 					labelColor = gui.errorLightColor
 
 				battery_advertise('Battery low :,O', labelColor)
-			else: 
+			else:
 				gui.labelBattAdvertise.grid_forget()
 
 		#print(gui.stopped)
-	
+
 	for _ in range(20):
 		msg_params.run = False
 		pub_params.publish(msg_params)

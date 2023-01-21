@@ -22,6 +22,8 @@
 #include "../state_machines/user_sm.h"
 #include "../state_machines/dijkstra.h"
 #include "../state_machines/dfs.h"
+#include "../state_machines/advance.h"
+#include "../state_machines/turn.h"
 #include "clips_ros/SimuladorRepresentation.h"
 #include "../behaviors/oracle.h"
 #include "../action_planner/action_planner.h"
@@ -39,7 +41,7 @@ int main(int argc ,char **argv)
 
     float lidar_readings[512];
     float light_readings[8];
-    
+
     int i;
     int tmp;
     int sensor;
@@ -52,7 +54,7 @@ int main(int argc ,char **argv)
     int cta_steps;
     int flg_result;
     int flg_noise=0;
-    
+
     float result;
     float final_x;
     float final_y;
@@ -61,7 +63,7 @@ int main(int argc ,char **argv)
     float max_turn_angle;
     float noise_advance;
     float noise_angle;
-    
+
     char path[100];
     char object_name[20];
 
@@ -100,7 +102,7 @@ int main(int argc ,char **argv)
 
             // it quantizes the sensory data
             q_light = quantize_light(light_readings); // function in ~/catkin_ws/src/simulator/src/motion_planner/motion_planner_utilities.h
-            
+
             if(params.noise )
                 q_inputs = quantize_laser_noise(lidar_readings,params.laser_num_sensors,params.laser_value); // function in ~/catkin_ws/src/simulator/src/motion_planner/motion_planner_utilities.h
             else
@@ -291,7 +293,7 @@ int main(int argc ,char **argv)
 
                 break;
 
-            
+
             case 10:
 
 		          action_planner(params.robot_x, params.robot_y,params.robot_theta,&movements);
@@ -325,12 +327,38 @@ int main(int argc ,char **argv)
                     mini_sm++;
                 }
 
-                
-                
+
+
 
                 break;
 
-             default:
+
+            // Special cases to test error mean and variance
+            case -1:
+                if (flagOnce)
+                {
+                    advance(&movements, max_advance);
+                    flagOnce = false;
+                }
+                else
+                {
+                    stop();
+                }
+                break;
+
+            case -2:
+                if (flagOnce)
+                {
+                    turn(&movements, max_turn_angle);
+                    flagOnce = false;
+                }
+                else
+                {
+                    stop();
+                }
+                break;
+
+            default:
                     printf(" ******* SELECTION NO DEFINED *******\n");
                     movements.twist = 3.1416/4;
                     movements.advance = .03;

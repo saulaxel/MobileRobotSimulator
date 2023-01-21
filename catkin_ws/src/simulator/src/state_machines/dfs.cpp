@@ -33,13 +33,13 @@ int read_nodes(char *file)
 	int i=0;
 	int flg = 0;
 	float tmp;
-	float dimensions_room_x,dimensions_room_y;
+	float dimensions_room_x, dimensions_room_y;
 
 
 	int node_index,node_connection,cost;
 
-	fp = fopen(file,"r"); 
-	 
+	fp = fopen(file,"r");
+
 	if( fp == NULL )
 	{
 		sprintf(data, "File %s does not exists\n", file);
@@ -76,7 +76,7 @@ int read_nodes(char *file)
 			//( connection 0 4 0.112605 )
 			fscanf(fp, "%s" ,data);
 			node_index = atoi(data);
-			
+
 			fscanf(fp, "%s" ,data);
 			node_connection = atoi(data);
 
@@ -101,7 +101,7 @@ void printNode(int i)
    	printf("num_conections %d \n",nodes[i].num_conections);
    	for(int j=0 ; j < nodes[i].num_conections; j++  )
    		printf(     "%d  %f \n",nodes[i].conections[j].node,nodes[i].conections[j].cost );
-  
+
 }
 
 
@@ -126,7 +126,7 @@ void dfs(int D ,int L)
 	int flagPush;
 
 	while(node_actual != L)
-	{	
+	{
 		print_stack();
 		flagPush = 1;
 		//printf("aa  %d \n",nodes[node_actual].num_conections );
@@ -141,12 +141,12 @@ void dfs(int D ,int L)
    				node_actual = nodes[node_actual].conections[j].node;
    				//printf("Node actual %d \n",node_actual);
    				flagPush = 0;
-   				break;	
+   				break;
    			}
    		}
-   		
+
    		if( flagPush==1 )
-   		{	
+   		{
    			pop();
    			node_actual = sp - 1;
 		}
@@ -157,7 +157,7 @@ void dfs(int D ,int L)
 int main(int argc, char ** argv)
 {
    char archivo[]="../data/obstacles/obstacles.top";
-   
+
    for(int i=0; i<200; i++)
    {
    		nodes[i].flag='N';
@@ -169,10 +169,10 @@ int main(int argc, char ** argv)
 
    //for(int i=0; i<num_nodes; i++)
    //	printNode(i);
-  
+
   printf("%d %d \n",atoi(argv[1]),atoi(argv[2]) );
    dfs(atoi(argv[1]),atoi(argv[2]));
    printf("Final Stack\n");
    print_stack();
 	return 0;
-} 
+}

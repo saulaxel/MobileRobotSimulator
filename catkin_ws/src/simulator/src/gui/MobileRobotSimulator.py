@@ -24,6 +24,9 @@ import numpy as np
 import subprocess
 from calc_errors import calculate_errors
 
+BEHAVIOUR_TEST_TWIST = -2
+BEHAVIOUR_TEST_ADVANCE = -1
+
 
 class MobileRobotSimulator(threading.Thread):
 
@@ -520,7 +523,7 @@ class MobileRobotSimulator(threading.Thread):
 #######################################
 #######################################
 
-    def s_t_simulation(self,star_stop): # Button start simulation
+    def s_t_simulation(self, star_stop): # Button start simulation
 
         if star_stop :
             self.w.delete(self.nodes_image)
@@ -1900,7 +1903,7 @@ class MobileRobotSimulator(threading.Thread):
              [0.0, 0.0]]
         )
 
-        self.table_data = np.zeros((0, 2))
+        self.angle_expected_real_history = np.zeros((0, 2))
 
         self.set_error_labels(table_default_data)
 
@@ -1995,20 +1998,61 @@ class MobileRobotSimulator(threading.Thread):
 
 
     def error_tests(self):
-        self.table_data = np.array([
-            [-1.0, -.6],
-            [0.0, -.1],
-            [1.0, 1.1],
-            [2.0, 1.95],
-            [3.0, 3.47],
-            [4.0, 4.02],
-            [5.0, 4.7],
-            [6.0, 7.18]
-        ])
+        """
+        Make error test with advance and twist of the robot
+        """
 
-        self.fill_table(self.errorTableCells, self.table_data)
-        self.set_error_labels(self.table_data)
-        self.plot_function_and_error(self.table_data)
+        # Errors are calculated with respect to the pose shown in the GUI,
+        # thus parameters are obtained from the same GUI. We could also use
+        # the parameters without scaling to the canvas (self.robotX and self.robotY)
+        # directly, and the error percentage should be the same, but the numbers
+        # would look unrelated to what the user sees
+        poseX = float(self.entryPoseX.get())
+        poseY = float(self.entryPoseY.get())
+        print('poseX', poseX)
+        print('poseY', poseY)
+        # The angle is actually the same in the GUI as in the robot values
+        # (self.robot_theta), that is, self.robot_theta is not scaled. However,
+        # we also take this value from the GUI for consistency.
+        angle = float(self.entryAngle.get())
+        print('angle', angle)
+
+
+        turnAngle = float(self.entryTurnAngle.get())
+
+        expectedAngle = angle + turnAngle
+        print('expectedAngle', expectedAngle)
+
+        # Move the robot
+        saved_behaviour = float(self.entryBehavior.get())
+        self.entryBehavior.delete ( 0, END )
+        self.entryBehavior.insert ( 0, BEHAVIOUR_TEST_TWIST)
+        self.s_t_simulation(True)
+
+        self.entryBehavior.delete ( 0, END )
+        self.entryBehavior.insert ( 0, saved_behaviour )
+
+
+
+        angle2 = float(self.entryAngle.get())
+        print('angle2', angle2)
+
+
+        #self.angle_expected_real_history = np.array([
+        #    [-1.0, -.6],
+        #    [0.0, -.1],
+        #    [1.0, 1.1],
+        #    [2.0, 1.95],
+        #    [3.0, 3.47],
+        #    [4.0, 4.02],
+        #    [5.0, 4.7],
+        #    [6.0, 7.18]
+        #])
+
+
+        #self.fill_table(self.errorTableCells, self.angle_expected_real_history)
+        #self.set_error_labels(self.angle_expected_real_history)
+        #self.plot_function_and_error(self.angle_expected_real_history)
 
 
     def set_error_labels(self, data):

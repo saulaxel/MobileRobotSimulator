@@ -1,3 +1,5 @@
+#pragma once
+
 typedef struct parameters_
 {
 	float robot_x;
@@ -39,7 +41,7 @@ typedef struct step_
 {
 	int node;
 	float x;
-	float y;	
+	float y;
 } step;
 
 
