@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #################################################
 #                                               #
 #   MobileRobotSimulator.py                     #
@@ -9,6 +10,7 @@
 #                                               #
 #################################################
 
+from __future__ import print_function
 import rospkg
 from Tkinter import *
 from tkFont import Font
@@ -24,8 +26,8 @@ import numpy as np
 import subprocess
 from calc_errors import calculate_errors
 
-BEHAVIOUR_TEST_TWIST = -2
-BEHAVIOUR_TEST_ADVANCE = -1
+BEHAVIOUR_TEST_TWIST = 21
+BEHAVIOUR_TEST_ADVANCE = 20
 
 
 class MobileRobotSimulator(threading.Thread):
@@ -644,12 +646,17 @@ class MobileRobotSimulator(threading.Thread):
 
         if self.steps_ == self.steps_aux:
             self.s_t_simulation(False)
+
         #elif( ( float(self.entryPoseX.get()) -self.light_x )**2 + (  float(self.entryPoseY.get())  - self.light_y )**2) < .05**2:
             #self.s_t_simulation(False)
         else:
             self.entryStepsExcec.config(text=str(self.steps_)[:4])
             self.rewind.append( [self.p_giro,self.p_distance])
             self.a.set(1)
+
+            if self.currently_testing:
+                self.handle_error_step()
+
 
     def handle_print_graph(self,graph_list):
         self.graph_list = graph_list
@@ -1875,13 +1882,17 @@ class MobileRobotSimulator(threading.Thread):
                                  background = self.backgroundColor, foreground = self.titlesColor, font = self.headLineFont )
 
         self.labelNumTests	= Label(self.errorMenu  ,text = "Num Tests:"			 , background = self.backgroundColor ,font = self.lineFont)
+        self.labelTestAngle	= Label(self.errorMenu  ,text = "Test Angle (°):"			 , background = self.backgroundColor ,font = self.lineFont)
         self.labelMean		= Label(self.errorMenu  ,text = "Error Mean:"			, background = self.backgroundColor ,font = self.lineFont)
         self.labelVariance	= Label(self.errorMenu  ,text = "Error Variance:"		, background = self.backgroundColor ,font = self.lineFont)
+        self.labelOutFile  = Label(self.errorMenu  ,text = "Output file:", background = self.backgroundColor ,font = self.lineFont)
 
-        self.entryNumTests	= Entry(self.errorMenu  ,width = 8	   , background = self.entrybackgroudColor ,foreground = self.entryforegroundColor)
-        self.labelMeanVal	 = Label(self.errorMenu  ,text = "" , background = self.backgroundColor ,font = self.lineFont)
+        self.entryNumTests	  = Entry(self.errorMenu  ,width = 8	   , background = self.entrybackgroudColor ,foreground = self.entryforegroundColor)
+        self.entryTestAngle	  = Entry(self.errorMenu  ,width = 8	   , background = self.entrybackgroudColor ,foreground = self.entryforegroundColor)
+        self.labelMeanVal	  = Label(self.errorMenu  ,text = "" , background = self.backgroundColor ,font = self.lineFont)
         self.labelVarianceVal = Label(self.errorMenu  ,text = "" , background = self.backgroundColor ,font = self.lineFont)
-        self.buttonTestError  = Button(self.errorMenu ,width = 20	  , text = "Start tests", foreground = self.buttonFontColor ,background = self.buttonColor, font = self.buttonFont, command = self.error_tests)
+        self.entryErrorFile     = Entry(self.errorMenu  ,width = 16	   , background = self.entrybackgroudColor ,foreground = self.entryforegroundColor)
+        self.buttonTestError  = Button(self.errorMenu ,width = 20	  , text = "Start tests", foreground = self.buttonFontColor ,background = self.buttonColor, font = self.buttonFont, command = self.error_test_start)
 
         self.canvasFunction = Canvas(self.errorMenu, width=300, height=300,
                                       bg=self.canvasColor)
@@ -1889,8 +1900,11 @@ class MobileRobotSimulator(threading.Thread):
                                      bg=self.canvasColor)
 
         self.entryNumTests   .insert ( 0, '10')
+        self.entryTestAngle  .insert ( 0, '45')
+        self.entryErrorFile    .insert ( 0, 'test_angle' )
 
         self.errorTable = []
+        self.currently_testing = []
 
         table_headers = ('Expected', 'Real')
         # A gui table is created with the right size to accommodate this data,
@@ -1914,16 +1928,20 @@ class MobileRobotSimulator(threading.Thread):
                                columnspan = 5)
         self.labelErrors.configure(anchor = 'center')
 
-        self.labelNumTests.grid(column = elabel_col, row = elabel_row + 1, sticky = (N, W), padx = (5,5))
-        self.labelMean	.grid(column = elabel_col, row = elabel_row + 2, sticky = (N, W), padx = (5,5))
-        self.labelVariance.grid(column = elabel_col, row = elabel_row + 3, sticky = (N, W), padx = (5,5))
-        self.buttonTestError  .grid(column = elabel_row, row = elabel_row + 5, sticky = (N, W), padx = (5,5))
+        self.labelNumTests   .grid(column = elabel_col, row = elabel_row + 1, sticky = (N, W), padx = (5,5))
+        self.labelTestAngle  .grid(column = elabel_col, row = elabel_row + 2, sticky = (N, W), padx = (5,5))
+        self.labelMean	     .grid(column = elabel_col, row = elabel_row + 3, sticky = (N, W), padx = (5,5))
+        self.labelVariance   .grid(column = elabel_col, row = elabel_row + 4, sticky = (N, W), padx = (5,5))
+        self.labelOutFile    .grid(column = elabel_col, row = elabel_row + 5, sticky = (N, W), padx = (5,5))
+        self.buttonTestError .grid(column = elabel_col, row = elabel_row + 6, sticky = (N, W), padx = (5,5))
 
-        self.entryNumTests	.grid(column = elabel_row + 1, row = elabel_row + 1, sticky = (N, W), padx = (5,5))
-        self.labelMeanVal	 .grid(column = elabel_row + 1, row = elabel_row + 2, sticky = (N, W), padx = (5,5))
-        self.labelVarianceVal .grid(column = elabel_row + 1, row = elabel_row + 3, sticky = (N, W), padx = (5,5))
+        self.entryNumTests    .grid(column = elabel_col + 1, row = elabel_row + 1, sticky = (N, W), padx = (5,5))
+        self.entryTestAngle   .grid(column = elabel_col + 1, row = elabel_row + 2, sticky = (N, W), padx = (5,5))
+        self.labelMeanVal     .grid(column = elabel_col + 1, row = elabel_row + 3, sticky = (N, W), padx = (5,5))
+        self.labelVarianceVal .grid(column = elabel_col + 1, row = elabel_row + 4, sticky = (N, W), padx = (5,5))
+        self.entryErrorFile   .grid(column = elabel_col + 1, row = elabel_row + 5, sticky = (N, W), padx = (5,5))
 
-        ec_row = 6
+        ec_row = 8
         ec_col = 0
         self.canvasFunction .grid(column = ec_col, row = ec_row,
                                    rowspan = 10,
@@ -1987,17 +2005,15 @@ class MobileRobotSimulator(threading.Thread):
         return theaders, tcells
 
     def fill_table(self, cells, data):
-        rows = len(cells)
-        cols = len(cells[0])
-
-        for i, row in enumerate(cells):
-            for j, cell in enumerate(row):
-                t = data[-i - 1, j] # Takes "data" in reverse order, last errors first
-                cell.config(text = t)
+        # Takes "data" in reverse order, last errors first and put it in the
+        # GUI table
+        for gui_row, data_row in zip(cells, reversed(data)):
+            for gui_cell, cell_data in zip(gui_row, data_row):
+                gui_cell.config(text = cell_data)
 
 
 
-    def error_tests(self):
+    def error_test_start(self):
         """
         Make error test with advance and twist of the robot
         """
@@ -2009,50 +2025,88 @@ class MobileRobotSimulator(threading.Thread):
         # would look unrelated to what the user sees
         poseX = float(self.entryPoseX.get())
         poseY = float(self.entryPoseY.get())
-        print('poseX', poseX)
-        print('poseY', poseY)
-        # The angle is actually the same in the GUI as in the robot values
-        # (self.robot_theta), that is, self.robot_theta is not scaled. However,
-        # we also take this value from the GUI for consistency.
-        angle = float(self.entryAngle.get())
-        print('angle', angle)
 
+        turn_angle = self.grad_to_rad(float(self.entryTestAngle.get()))
 
-        turnAngle = float(self.entryTurnAngle.get())
+        self.set_zero_angle()
+        self.currently_testing = ['angle']
 
-        expectedAngle = angle + turnAngle
-        print('expectedAngle', expectedAngle)
+        self.expected_angle = turn_angle
 
-        # Move the robot
-        saved_behaviour = float(self.entryBehavior.get())
+        # Save some state before putting error-related stuff in the GUI
+        self.saved_behaviour = self.entryBehavior.get()
         self.entryBehavior.delete ( 0, END )
-        self.entryBehavior.insert ( 0, BEHAVIOUR_TEST_TWIST)
+        self.entryBehavior.insert ( 0, BEHAVIOUR_TEST_TWIST )
+
+        self.saved_steps = self.entrySteps.get()
+        self.entrySteps.delete ( 0, END )
+        self.entrySteps.insert ( 0, self.entryNumTests.get() )
+
+        self.saved_angle = self.entryAngle.get()
+        self.entryTurnAngle.delete ( 0, END )
+        self.entryTurnAngle.insert ( 0, turn_angle )
+
         self.s_t_simulation(True)
 
+        self.angle_expected_real_history = np.zeros((0, 2))
+
+
+    def handle_error_step(self):
+        expected = self.rad_to_grad(self.expected_angle)
+        real = self.rad_to_grad(float(self.entryAngle.get()))
+        new_error_pair = (expected, real)
+        self.angle_expected_real_history = \
+            np.vstack((self.angle_expected_real_history, new_error_pair))
+
+        self.fill_table(self.errorTableCells, self.angle_expected_real_history)
+        self.set_error_labels(self.angle_expected_real_history)
+        self.plot_function_and_error(self.angle_expected_real_history)
+        self.set_zero_angle()
+
+        if not self.startFlag:
+            self.handle_error_test_end()
+
+
+
+
+    def handle_error_test_end(self):
+        # Recovering saved state
         self.entryBehavior.delete ( 0, END )
-        self.entryBehavior.insert ( 0, saved_behaviour )
+        self.entryBehavior.insert ( 0, self.saved_behaviour )
+
+        self.entrySteps.delete ( 0, END )
+        self.entrySteps.insert ( 0, self.saved_steps )
+
+        self.entryTurnAngle.delete ( 0, END )
+        self.entryTurnAngle.insert ( 0, self.saved_angle )
+
+        self.currently_testing = []
+
+        # Save results
+        base = self.rospack.get_path('simulator')
+        filename = '{base}/src/data/tests/{name}.dat'.format(
+            base = base,
+            name = self.entryErrorFile.get())
+        np.savetxt(filename, self.angle_expected_real_history, delimiter=' ')
+
+        with open(filename, 'w') as f:
+            print('Expected Real', file=f)
+
+            number_format = '{:.4f}'
+            for line in self.angle_expected_real_history:
+                first, rest = line[0], line[1:]
+                print(number_format.format(first), end='', file=f)
+
+                for n in rest:
+                    print(' ', number_format.format(n), sep='', end='', file=f)
+
+                print(file=f)
 
 
 
-        angle2 = float(self.entryAngle.get())
-        print('angle2', angle2)
 
-
-        #self.angle_expected_real_history = np.array([
-        #    [-1.0, -.6],
-        #    [0.0, -.1],
-        #    [1.0, 1.1],
-        #    [2.0, 1.95],
-        #    [3.0, 3.47],
-        #    [4.0, 4.02],
-        #    [5.0, 4.7],
-        #    [6.0, 7.18]
-        #])
-
-
-        #self.fill_table(self.errorTableCells, self.angle_expected_real_history)
-        #self.set_error_labels(self.angle_expected_real_history)
-        #self.plot_function_and_error(self.angle_expected_real_history)
+        tkMessageBox.showinfo(title='Saved tests',
+                              message='Test data saved to {}'.format(filename))
 
 
     def set_error_labels(self, data):
@@ -2084,6 +2138,12 @@ class MobileRobotSimulator(threading.Thread):
             min_val = min(min_val, np.min(f))
             max_val = max(max_val, np.max(f))
 
+        # Adjust so that very small variations are shown approximately in the
+        # center
+        if abs(min_val - max_val) < .1:
+            min_val -= .5
+            max_val += .5
+
 
         # Reference Axis
         y0 = canvas_size - (0 - min_val) * canvas_size / (max_val - min_val)
@@ -2108,6 +2168,13 @@ class MobileRobotSimulator(threading.Thread):
     def resetCanvas(self, canvas):
         canvas.delete('all')
 
+
+    def rad_to_grad(self, rad):
+        return rad * 180 / math.pi
+
+
+    def grad_to_rad(self, grad):
+        return grad * math.pi / 180
 
 
     def run(self):

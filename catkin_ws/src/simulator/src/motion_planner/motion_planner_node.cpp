@@ -113,6 +113,7 @@ int main(int argc ,char **argv)
             max_advance = params.robot_max_advance;
             max_turn_angle = params.robot_turn_angle;
 
+            printf("Current behavior %d\n", params.behavior);
             switch ( params.behavior)
             {
 
@@ -334,28 +335,12 @@ int main(int argc ,char **argv)
 
 
             // Special cases to test error mean and variance
-            case -1:
-                if (flagOnce)
-                {
-                    advance(&movements, max_advance);
-                    flagOnce = false;
-                }
-                else
-                {
-                    stop();
-                }
+            case 20:
+                advance(&movements, max_advance);
                 break;
 
-            case -2:
-                if (flagOnce)
-                {
-                    turn(&movements, max_turn_angle);
-                    flagOnce = false;
-                }
-                else
-                {
-                    stop();
-                }
+            case 21:
+                turn(&movements, max_turn_angle);
                 break;
 
             default:
@@ -367,9 +352,9 @@ int main(int argc ,char **argv)
 
             ros::spinOnce();
             printf("\n\n             MOTION PLANNER \n________________________________\n");
-            printf("Light: x = %f  y = %f \n",params.light_x,params.light_y);
-            printf("Robot: x = %f  y = %f \n",params.robot_x,params.robot_y);
-            printf("Step: %d \n",cta_steps++);
+            printf("Light: x = %f  y = %f \n", params.light_x, params.light_y);
+            printf("Robot: x = %f  y = %f \n", params.robot_x, params.robot_y);
+            printf("Step: %d \n", cta_steps++);
             printf("Movement: twist: %f advance: %f \n" ,movements.twist ,movements.advance );
 
             flg_noise = params.noise;
