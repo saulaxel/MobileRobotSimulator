@@ -24,7 +24,7 @@ import tkMessageBox
 import os
 import numpy as np
 import subprocess
-from calc_errors import calculate_errors
+from aux_stats import calculate_statistics, calculate_errors
 from grid_manager import GridManager
 
 BEHAVIOUR_TEST_TWIST = 21
@@ -2025,13 +2025,12 @@ class MobileRobotSimulator(threading.Thread):
         with open(filename, 'w') as f:
             print('Expected Real', file=f)
 
-            number_format = '{:.4f}'
             for line in win.angle_expected_real_history:
                 first, rest = line[0], line[1:]
-                print(number_format.format(first), end='', file=f)
+                print(self.format_real(first), end='', file=f)
 
                 for n in rest:
-                    print(' ', number_format.format(n), sep='', end='', file=f)
+                    print(' ', self.format_real(n), sep='', end='', file=f)
 
                 print(file=f)
 
@@ -2043,9 +2042,14 @@ class MobileRobotSimulator(threading.Thread):
 
 
     def set_error_labels(self, frame, data):
-        mean, var = calculate_errors(data)
-        frame.labelMeanVal.config(text = '{:.3f}'.format(mean))
-        frame.labelVarianceVal.config(text = '{:.3f}'.format(var))
+        mean, var = calculate_statistics(data[:,1])
+        err_mean, err_var = calculate_errors(data)
+
+        frame.labelMeanVal.config(text = self.format_real(mean))
+        frame.labelVarianceVal.config(text = self.format_real(var))
+
+        frame.labelErrMeanVal.config(text = self.format_real(err_mean))
+        frame.labelErrVarianceVal.config(text = self.format_real(err_var))
 
 
     def plot_function_and_error(self, data):
@@ -2131,7 +2135,7 @@ class MobileRobotSimulator(threading.Thread):
             angle_rad = self.deg_to_rad(angle_deg)
 
             win.entryTestAngle.delete ( 0, END )
-            win.entryTestAngle.insert ( 0, '{:.4f}'.format(angle_rad)  )
+            win.entryTestAngle.insert ( 0, self.format_real(angle_rad)  )
 
 
 
@@ -2143,41 +2147,49 @@ class MobileRobotSimulator(threading.Thread):
 
         win.tabControl = ttk.Notebook(win)
         win.angleErrorMenu   = self.Frame(win.tabControl,
-                                           width = 300, height = 900)
+                                          width = 300, height = 900)
         win.advanceErrorMenu = self.Frame(win.tabControl,
-                                           width = 300, height = 900)
+                                          width = 300, height = 900)
         win.tabControl.grid(column = 0, row = 0 , sticky = (N, S, E, W))
 
         angMenu = win.angleErrorMenu
-        advanceMenu = win.advanceErrorMenu
+        advMenu = win.advanceErrorMenu
 
         win.tabControl.add(angMenu, text='Angle testing')
-        win.tabControl.add(advanceMenu, text='Advance testing')
+        win.tabControl.add(advMenu, text='Advance testing')
 
 
-        ##### Creando la interfaz para el ángulo
-        angMenu.labelErrors = self.LabelHeadline(angMenu, text = "Error Measurement")
+        ##### Creating the window for angle testing #####
+        angMenu.labelErrors = self.LabelHeadline(angMenu, text = "Angle Error Testing")
 
-        angMenu.labelNumTests  = self.LabelLine(angMenu, text = "Num Tests:")
-        angMenu.labelTestAngle = self.LabelLine(angMenu, text = "Test Angle:")
-        angMenu.labelMean      = self.LabelLine(angMenu, text = "Error Mean:")
-        angMenu.labelVariance  = self.LabelLine(angMenu, text = "Error Variance:")
-        angMenu.labelOutFile   = self.LabelLine(angMenu, text = "Output file:")
+        angMenu.labelNumTests    = self.LabelLine(angMenu, text = "Num Tests:")
+        angMenu.labelTestAngle   = self.LabelLine(angMenu, text = "Test Angle:")
+        angMenu.labelMean        = self.LabelLine(angMenu, text = "Mean:")
+        angMenu.labelVariance    = self.LabelLine(angMenu, text = "Variance:")
+        angMenu.labelErrMean     = self.LabelLine(angMenu, text = "Error Mean:")
+        angMenu.labelErrVariance = self.LabelLine(angMenu, text = "Error Variance:")
+        angMenu.labelOutFile     = self.LabelLine(angMenu, text = "Output file:")
 
-        angMenu.entryNumTests    = self.Entry(angMenu)
-        angMenu.entryTestAngle   = self.Entry(angMenu)
-        angMenu.labelMeanVal     = self.LabelLine(angMenu, text = "" )
-        angMenu.labelVarianceVal = self.LabelLine(angMenu, text = "" )
-        angMenu.entryErrorFile   = self.Entry(angMenu, width = 16)
-        angMenu.buttonTestError  = self.Button(angMenu, text = "Start tests",
-                                               command = self.error_test_start)
+        angMenu.entryNumTests       = self.Entry(angMenu)
+        angMenu.entryTestAngle      = self.Entry(angMenu)
+        angMenu.labelMeanVal        = self.LabelLine(angMenu, text = "" )
+        angMenu.labelVarianceVal    = self.LabelLine(angMenu, text = "" )
+        angMenu.labelErrMeanVal     = self.LabelLine(angMenu, text = "" )
+        angMenu.labelErrVarianceVal = self.LabelLine(angMenu, text = "" )
+        angMenu.entryErrorFile      = self.Entry(angMenu, width = 16)
+        angMenu.buttonTestError     = self.Button(angMenu, text = "Start tests",
+                                                  command = self.error_test_start)
 
+        angMenu.labelPlotValues = self.LabelHeadline(angMenu,
+                                                     text = "Plot values")
+        angMenu.labelPlotError = self.LabelHeadline(angMenu,
+                                                    text = "Plot errors")
         angMenu.canvasFunction = self.Canvas(angMenu, width=300, height=300)
         angMenu.canvasError    = self.Canvas(angMenu, width=300, height=300)
 
-        angMenu.entryNumTests   .insert ( 0, '10')
-        angMenu.entryTestAngle  .insert ( 0, '0.7857')
-        angMenu.entryErrorFile  .insert ( 0, 'test_angle' )
+        angMenu.entryNumTests  .insert ( 0, '10')
+        angMenu.entryTestAngle .insert ( 0, '0.7857')
+        angMenu.entryErrorFile .insert ( 0, 'test_angle' )
 
         angMenu.errorTable = []
         angMenu.currently_testing = []
@@ -2203,39 +2215,41 @@ class MobileRobotSimulator(threading.Thread):
         gm = GridManager(base_col=elabel_col, base_row=elabel_row,
                              sticky=(N, W), padx=(5, 5))
 
-        gm.grid_and_down(angMenu.labelErrors, columnspan=5)
+        gm.grid(angMenu.labelErrors, columnspan=5).down()
         angMenu.labelErrors.configure(anchor = 'center')
 
-        gm.grid_and_down(angMenu.labelNumTests)
-        gm.grid_and_down(angMenu.labelNumTests)
-        gm.grid_and_down(angMenu.labelTestAngle)
-        gm.grid_and_down(angMenu.labelMean)
-        gm.grid_and_down(angMenu.labelVariance)
-        gm.grid_and_down(angMenu.labelOutFile)
-        gm.grid_and_down(angMenu.buttonTestError)
+        gm.grid(angMenu.labelNumTests).down()
+        gm.grid(angMenu.labelNumTests).down()
+        gm.grid(angMenu.labelTestAngle).down()
+        gm.grid(angMenu.labelMean).down()
+        gm.grid(angMenu.labelVariance).down()
+        gm.grid(angMenu.labelErrMean).down()
+        gm.grid(angMenu.labelErrVariance).down()
+        gm.grid(angMenu.labelOutFile).down()
+        gm.grid(angMenu.buttonTestError)
 
-        gm.return_base()
-        gm.right()
-        gm.down(2)
+        gm.return_base().right().down(2)
 
-        gm.grid_and_down(angMenu.entryNumTests)
-        gm.grid_and_down(angMenu.entryTestAngle)
-        gm.grid_and_down(angMenu.labelMeanVal)
-        gm.grid_and_down(angMenu.labelVarianceVal)
-        gm.grid_and_down(angMenu.entryErrorFile)
+        gm.grid(angMenu.entryNumTests).down()
+        gm.grid(angMenu.entryTestAngle).down()
+        gm.grid(angMenu.labelMeanVal).down()
+        gm.grid(angMenu.labelVarianceVal).down()
+        gm.grid(angMenu.labelErrMeanVal).down()
+        gm.grid(angMenu.labelErrVarianceVal).down()
+        gm.grid(angMenu.entryErrorFile)
 
-        error_canvas_row = 8
-        error_canvas_col = 0
-        gm.set_base(base_row=error_canvas_row, base_col=error_canvas_col)
+        gm.down(2) # Two down because of the button to start tests
 
-        gm.grid_and_right(angMenu.canvasFunction, rowspan=10, columnspan=2)
-        gm.right()
+        gm.right().grid(angMenu.labelPlotError)
+        gm.left(2).grid(angMenu.labelPlotValues).down()
+
+        gm.grid(angMenu.canvasFunction, rowspan=10, columnspan=2).right(2)
         gm.grid(angMenu.canvasError, rowspan=10, columnspan=3)
 
 
         # Build a table for expected vs real value
         etable_col = elabel_col + 3
-        etable_row = elabel_row
+        etable_row = elabel_row + 2
 
 
         theaders, tcells = \
@@ -2252,6 +2266,10 @@ class MobileRobotSimulator(threading.Thread):
         angMenu.entryTestAngle.bind('<Return>', self.translate_deg_to_rad)
 
         return win
+
+
+    def format_real(self, val):
+        return '{:.4f}'.format(val)
 
 
     def run(self):
