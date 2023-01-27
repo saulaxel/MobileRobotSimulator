@@ -31,6 +31,31 @@ BEHAVIOUR_TEST_TWIST = 21
 BEHAVIOUR_TEST_ADVANCE = 20
 
 
+def set_entry(entry, text):
+    entry.delete ( 0, END )
+    entry.insert ( 0, text )
+
+
+def handle_entry_deg_to_rad(entry):
+    angle = entry.get()
+
+    angle_deg = None
+    if angle.endswith('deg'):
+        angle_deg = float(angle[:-3])
+    elif angle.endswith('d'):
+        angle_deg = float(angle[:-1])
+
+    if angle_deg:
+        angle_rad = self.deg_to_rad(angle_deg)
+
+        set_entry(entry, self.format_real(angle_rad))
+
+
+def register_deg_to_rad_handling(entry):
+    test_angle_handle = lambda: handle_entry_deg_to_rad(entry)
+    entry.bind('<Return>', test_angle_handle)
+
+
 class MobileRobotSimulator(threading.Thread):
 
     def __init__(self):
@@ -1446,6 +1471,16 @@ class MobileRobotSimulator(threading.Thread):
         self.robot_theta = 0.0
         self.plot_robot()
 
+    def set_angle_directly(self, angle):
+        self.robot_theta = angle
+        self.plot_robot()
+
+    def set_pose(self, poseX, poseY):
+        self.robotX = poseX * self.canvasX / self.mapX
+        self.robotY = (self.mapY - poseY) * self.canvasY / self.mapX
+
+        self.plot_robot()
+
     def denable(self,state): # It disables some widgets when  a simulation is running
         self.buttonPlotTopological.configure(state=state)
         self.entryFile          .configure(state=state)
@@ -1910,7 +1945,7 @@ class MobileRobotSimulator(threading.Thread):
                       bg=self.canvasColor)
 
 
-    def table(self, parent, table_headers, default_data, start_row, start_col):
+    def Table(self, parent, table_headers, default_data, start_row, start_col):
 
         theaders = []
         # Place the header of the table
@@ -1937,95 +1972,134 @@ class MobileRobotSimulator(threading.Thread):
         # GUI table
         for gui_row, data_row in zip(cells, reversed(data)):
             for gui_cell, cell_data in zip(gui_row, data_row):
-                gui_cell.config(text = cell_data)
+                gui_cell.config(text = self.format_real(cell_data))
 
 
 
-    def error_test_start(self):
+    def error_test_start(self, tested_thing, test_win):
         """
         Make error test with advance and twist of the robot
         """
 
-        win = self.errors_subwindow.angleErrorMenu
+        self.currently_testing = tested_thing
+        self.test_win = test_win
 
         # Errors are calculated with respect to the pose shown in the GUI,
         # thus parameters are obtained from the same GUI. We could also use
         # the parameters without scaling to the canvas (self.robotX and self.robotY)
         # directly, and the error percentage should be the same, but the numbers
         # would look unrelated to what the user sees
-        poseX = float(self.entryPoseX.get())
-        poseY = float(self.entryPoseY.get())
 
-        turn_angle = float(win.entryTestAngle.get())
+        if self.currently_testing == 'angle':
+            # Starting angle
+            self.set_zero_angle()
 
-        self.set_zero_angle()
-        self.currently_testing = ['angle']
+            # Amount of change
+            turn_angle = float(test_win.entryTestAngle.get())
 
-        self.expected_angle = turn_angle
+            # Expected result
+            self.expected_angle = turn_angle
+
+            # Reset history with size 0 x 4 (expected x and y and real x and y)
+            test_win.test_value_history = np.zeros((0, 2))
+        else:
+            self.set_zero_angle()
+            # Starting pose
+            poseX = float(self.entryPoseX.get())
+            poseY = float(self.entryPoseY.get())
+            angle = float(self.entryAngle.get())
+
+            self.startX = poseX
+            self.startY = poseY
+
+            # Amount of change
+            advance = float(test_win.entryTestAdvance.get())
+
+            # Expected result
+            self.expectedX = poseX + advance * math.cos(angle)
+            self.expectedY = poseY + advance * math.sin(angle)
+
+            # Reset history with size 0 x 2 (expected angle and real angle)
+            test_win.test_value_history = np.zeros((0, 4))
 
         # Save some state before putting error-related stuff in the GUI
         self.saved_behaviour = self.entryBehavior.get()
-        self.entryBehavior.delete ( 0, END )
-        self.entryBehavior.insert ( 0, BEHAVIOUR_TEST_TWIST )
+
+        if self.currently_testing == 'angle':
+            set_entry(self.entryBehavior, BEHAVIOUR_TEST_TWIST)
+        else:
+            set_entry(self.entryBehavior, BEHAVIOUR_TEST_ADVANCE)
 
         self.saved_steps = self.entrySteps.get()
-        self.entrySteps.delete ( 0, END )
-        self.entrySteps.insert ( 0, win.entryNumTests.get() )
+        set_entry(self.entrySteps, test_win.entryNumTests.get())
 
-        self.saved_angle = self.entryAngle.get()
-        self.entryTurnAngle.delete ( 0, END )
-        self.entryTurnAngle.insert ( 0, turn_angle )
+        if self.currently_testing == 'angle':
+            self.saved_angle = self.entryAngle.get()
+            set_entry(self.entryTurnAngle, turn_angle)
+        else:
+            self.saved_advance = self.entryAdvance.get()
+            set_entry(self.entryAdvance, advance)
 
         self.s_t_simulation(True)
 
-        win.angle_expected_real_history = np.zeros((0, 2))
-
 
     def handle_error_step(self):
-        win = self.errors_subwindow.angleErrorMenu
-        expected = self.expected_angle
-        real = float(self.entryAngle.get())
-        new_error_pair = (expected, real)
-        win.angle_expected_real_history = \
-            np.vstack((win.angle_expected_real_history, new_error_pair))
+        test_win = self.test_win
+        test_type = self.currently_testing
 
-        self.fill_table(win.errorTableCells, win.angle_expected_real_history)
-        self.set_error_labels(win, win.angle_expected_real_history)
-        self.plot_function_and_error(win.angle_expected_real_history)
-        self.set_zero_angle()
+        if self.currently_testing == 'angle':
+            expected = (self.expected_angle, )
+            real = (float(self.entryAngle.get()), )
+            # Single element tuple is used so that we can use the same code
+            # when there are one or multiple expected values
+        else:
+            expected = (self.expectedX, self.expectedY)
+            real = (float(self.entryPoseX.get()), float(self.entryPoseY.get()))
+
+        new_error_pair = expected + real
+
+        test_win.test_value_history = \
+            np.vstack((test_win.test_value_history, new_error_pair))
+
+        self.fill_table(test_win.errorTableCells, test_win.test_value_history)
+        self.set_error_labels(test_win, test_type, test_win.test_value_history)
+        self.plot_function_and_error(test_win.test_value_history)
+
+        # Return to the initial state
+        if self.currently_testing == 'angle':
+            self.set_zero_angle()
+        else:
+            self.set_zero_angle()
+            self.set_pose(self.startX, self.startY)
 
         if not self.startFlag:
             self.handle_error_test_end()
 
 
-
-
     def handle_error_test_end(self):
-        win = self.errors_subwindow.angleErrorMenu
-
         # Recovering saved state
-        self.entryBehavior.delete ( 0, END )
-        self.entryBehavior.insert ( 0, self.saved_behaviour )
+        set_entry(self.entryBehavior, self.saved_behaviour)
 
-        self.entrySteps.delete ( 0, END )
-        self.entrySteps.insert ( 0, self.saved_steps )
+        set_entry(self.entrySteps, self.saved_steps)
 
-        self.entryTurnAngle.delete ( 0, END )
-        self.entryTurnAngle.insert ( 0, self.saved_angle )
-
-        self.currently_testing = []
+        if self.currently_testing == 'angle':
+            set_entry(self.entryTurnAngle, self.saved_angle)
+        else:
+            set_entry(self.entryAdvance, self.saved_advance)
 
         # Save results
         base = self.rospack.get_path('simulator')
         filename = '{base}/src/data/tests/{name}.dat'.format(
             base = base,
-            name = win.entryErrorFile.get())
-        np.savetxt(filename, win.angle_expected_real_history, delimiter=' ')
+            name = self.test_win.entryErrorFile.get())
 
         with open(filename, 'w') as f:
-            print('Expected Real', file=f)
+            if self.currently_testing == 'angle':
+                print('Expected Real', file=f)
+            else:
+                print('Expected_X Expected_Y Real_X Real_Y')
 
-            for line in win.angle_expected_real_history:
+            for line in self.test_win.test_value_history:
                 first, rest = line[0], line[1:]
                 print(self.format_real(first), end='', file=f)
 
@@ -2034,38 +2108,72 @@ class MobileRobotSimulator(threading.Thread):
 
                 print(file=f)
 
-
-
-
         tkMessageBox.showinfo(title='Saved tests',
                               message='Test data saved to {}'.format(filename))
 
 
-    def set_error_labels(self, frame, data):
-        mean, var = calculate_statistics(data[:,1])
-        err_mean, err_var = calculate_errors(data)
+        self.currently_testing = ''
+        self.test_win = None
 
-        frame.labelMeanVal.config(text = self.format_real(mean))
-        frame.labelVarianceVal.config(text = self.format_real(var))
 
-        frame.labelErrMeanVal.config(text = self.format_real(err_mean))
-        frame.labelErrVarianceVal.config(text = self.format_real(err_var))
+
+    def set_error_labels(self, test_win, test_type, data):
+        if test_type == 'angle':
+            mean, var = calculate_statistics(data[:,1])
+            err_mean, err_var = calculate_errors(data)
+
+            test_win.labelMeanVal.config(text = self.format_real(mean))
+            test_win.labelVarianceVal.config(text = self.format_real(var))
+
+            test_win.labelErrMeanVal.config(text = self.format_real(err_mean))
+            test_win.labelErrVarianceVal.config(text = self.format_real(err_var))
+        else:
+            xmean, xvar = calculate_statistics(data[:,2])
+            ymean, yvar = calculate_statistics(data[:,3])
+            xerr_mean, xerr_var = calculate_errors(data[:,(0,2)])
+            yerr_mean, yerr_var = calculate_errors(data[:,(1,3)])
+
+            test_win.labelXMeanVal.config(text = self.format_real(xmean))
+            test_win.labelXVarianceVal.config(text = self.format_real(xvar))
+
+            test_win.labelYMeanVal.config(text = self.format_real(ymean))
+            test_win.labelYVarianceVal.config(text = self.format_real(yvar))
+
+            test_win.labelXErrMeanVal.config(text = self.format_real(xerr_mean))
+            test_win.labelXErrVarianceVal.config(text = self.format_real(xerr_var))
+
+            test_win.labelYErrMeanVal.config(text = self.format_real(yerr_mean))
+            test_win.labelYErrVarianceVal.config(text = self.format_real(yerr_var))
 
 
     def plot_function_and_error(self, data):
-        win = self.errors_subwindow.angleErrorMenu
-        self.resetCanvas(win.canvasFunction)
+        test_win = self.test_win
 
+        if self.currently_testing == 'angle':
+            self.resetCanvas(test_win.canvasFunction)
+            self.plot_in_canvas(test_win.canvasFunction,
+                                colors=('magenta', 'blue'),
+                                functions=(data[:, 0], data[:, 1]))
 
-        self.plot_in_canvas(win.canvasFunction,
-                            colors=('magenta', 'blue'),
-                            functions=(data[:, 0], data[:, 1]))
+            self.resetCanvas(test_win.canvasError)
+            err = data[:, 0] - data[:, 1]
+            self.plot_in_canvas(test_win.canvasError,
+                                colors=('red',),
+                                functions=(err,))
+        else:
+            self.resetCanvas(test_win.canvasFunction)
 
-        self.resetCanvas(win.canvasError)
-        err = data[:, 0] - data[:, 1]
-        self.plot_in_canvas(win.canvasError,
-                            colors=('red',),
-                            functions=(err,))
+            self.plot_in_canvas(test_win.canvasFunction,
+                                colors=('green', 'blue', 'violet', 'magenta'),
+                                functions=(data[:, 0], data[:, 1],
+                                           data[:, 2], data[:, 3]))
+
+            self.resetCanvas(test_win.canvasError)
+            X_error = data[:, 0] - data[:, 2]
+            Y_error = data[:, 1] - data[:, 3]
+            self.plot_in_canvas(test_win.canvasError,
+                                colors=('red', 'orange'),
+                                functions=(X_error, Y_error))
 
 
     def plot_in_canvas(self, canvas, functions, colors):
@@ -2109,6 +2217,8 @@ class MobileRobotSimulator(threading.Thread):
 
                 canvas.create_line(x1, y1, x2, y2, fill=color)
 
+        return min_val, max_val
+
 
     def resetCanvas(self, canvas):
         canvas.delete('all')
@@ -2120,22 +2230,6 @@ class MobileRobotSimulator(threading.Thread):
 
     def deg_to_rad(self, deg):
         return deg * math.pi / 180.0
-
-    def translate_deg_to_rad(self, deg):
-        win = self.errors_subwindow.angleErrorMenu
-        angle = win.entryTestAngle.get()
-
-        angle_deg = None
-        if angle.endswith('deg'):
-            angle_deg = float(angle[:-3])
-        elif angle.endswith('d'):
-            angle_deg = float(angle[:-1])
-
-        if angle_deg:
-            angle_rad = self.deg_to_rad(angle_deg)
-
-            win.entryTestAngle.delete ( 0, END )
-            win.entryTestAngle.insert ( 0, self.format_real(angle_rad)  )
 
 
 
@@ -2158,6 +2252,8 @@ class MobileRobotSimulator(threading.Thread):
         win.tabControl.add(angMenu, text='Angle testing')
         win.tabControl.add(advMenu, text='Advance testing')
 
+        self.currently_testing = '' # Intended to be empty when nothing is being
+                                    # tested
 
         ##### Creating the window for angle testing #####
         angMenu.labelErrors = self.LabelHeadline(angMenu, text = "Angle Error Testing")
@@ -2177,8 +2273,14 @@ class MobileRobotSimulator(threading.Thread):
         angMenu.labelErrMeanVal     = self.LabelLine(angMenu, text = "" )
         angMenu.labelErrVarianceVal = self.LabelLine(angMenu, text = "" )
         angMenu.entryErrorFile      = self.Entry(angMenu, width = 16)
-        angMenu.buttonTestError     = self.Button(angMenu, text = "Start tests",
-                                                  command = self.error_test_start)
+
+        ang_handle_test_start = lambda: self.error_test_start(
+            tested_thing = 'angle',
+            test_win = angMenu
+        )
+        angMenu.buttonTestError = self.Button(angMenu, text = "Start tests",
+                                              command = ang_handle_test_start)
+
 
         angMenu.labelPlotValues = self.LabelHeadline(angMenu,
                                                      text = "Plot values")
@@ -2192,27 +2294,27 @@ class MobileRobotSimulator(threading.Thread):
         angMenu.entryErrorFile .insert ( 0, 'test_angle' )
 
         angMenu.errorTable = []
-        angMenu.currently_testing = []
 
-        table_headers = ('Expected', 'Real')
+        ang_table_headers = ('Expected', 'Real')
         # A gui table is created with the right size to accommodate this data,
         # so adding rows or columns will make the table grow larger
-        table_default_data = np.array(
+        ang_table_default_data = np.array(
             [[0.0, 0.0],
+             [0.0, 0.0],
              [0.0, 0.0],
              [0.0, 0.0],
              [0.0, 0.0],
              [0.0, 0.0]]
         )
 
-        angMenu.angle_expected_real_history = np.zeros((0, 2))
+        angMenu.test_value_history = np.zeros((0, 2))
 
-        self.set_error_labels(angMenu, table_default_data)
+        self.set_error_labels(angMenu, 'angle', ang_table_default_data)
 
-        elabel_col = 0
-        elabel_row = 0
+        ang_elabel_col = 0
+        ang_elabel_row = 0
 
-        gm = GridManager(base_col=elabel_col, base_row=elabel_row,
+        gm = GridManager(base_col=ang_elabel_col, base_row=ang_elabel_row,
                              sticky=(N, W), padx=(5, 5))
 
         gm.grid(angMenu.labelErrors, columnspan=5).down()
@@ -2248,23 +2350,149 @@ class MobileRobotSimulator(threading.Thread):
 
 
         # Build a table for expected vs real value
-        etable_col = elabel_col + 3
-        etable_row = elabel_row + 2
+        ang_etable_col = ang_elabel_col + 3
+        ang_etable_row = ang_elabel_row + 2
 
+        ang_theaders, ang_tcells = \
+            self.Table(parent = angMenu,
+                       table_headers = ang_table_headers,
+                       default_data = ang_table_default_data,
+                       start_col = ang_etable_col,
+                       start_row = ang_etable_row)
 
-        theaders, tcells = \
-            self.table(parent = angMenu,
-                       table_headers = table_headers,
-                       default_data = table_default_data,
-                       start_col = etable_col,
-                       start_row = etable_row)
-
-        angMenu.errorTableHeaders = theaders
-        angMenu.errorTableCells   = tcells
+        angMenu.errorTableHeaders = ang_theaders
+        angMenu.errorTableCells   = ang_tcells
 
         # Events
-        angMenu.entryTestAngle.bind('<Return>', self.translate_deg_to_rad)
+        register_deg_to_rad_handling(angMenu.entryTestAngle)
 
+        ##### Creating the window for advance testing #####
+        advMenu.labelErrors = self.LabelHeadline(advMenu, text = "Angle Error Testing")
+
+        advMenu.labelNumTests     = self.LabelLine(advMenu, text = "Num Tests:")
+        advMenu.labelTestAdvance  = self.LabelLine(advMenu, text = "Test Advance:")
+        advMenu.labelXMean        = self.LabelLine(advMenu, text = "X Mean:")
+        advMenu.labelXVariance    = self.LabelLine(advMenu, text = "X Variance:")
+        advMenu.labelYMean        = self.LabelLine(advMenu, text = "Y Mean:")
+        advMenu.labelYVariance    = self.LabelLine(advMenu, text = "Y Variance:")
+        advMenu.labelXErrMean     = self.LabelLine(advMenu, text = "X Error Mean:")
+        advMenu.labelXErrVariance = self.LabelLine(advMenu, text = "X Error Variance:")
+        advMenu.labelYErrMean     = self.LabelLine(advMenu, text = "Y Error Mean:")
+        advMenu.labelYErrVariance = self.LabelLine(advMenu, text = "Y Error Variance:")
+        advMenu.labelOutFile      = self.LabelLine(advMenu, text = "Output file:")
+
+        advMenu.entryNumTests        = self.Entry(advMenu)
+        advMenu.entryTestAdvance     = self.Entry(advMenu)
+        advMenu.labelXMeanVal        = self.LabelLine(advMenu, text = "" )
+        advMenu.labelXVarianceVal    = self.LabelLine(advMenu, text = "" )
+        advMenu.labelYMeanVal        = self.LabelLine(advMenu, text = "" )
+        advMenu.labelYVarianceVal    = self.LabelLine(advMenu, text = "" )
+        advMenu.labelXErrMeanVal     = self.LabelLine(advMenu, text = "" )
+        advMenu.labelXErrVarianceVal = self.LabelLine(advMenu, text = "" )
+        advMenu.labelYErrMeanVal     = self.LabelLine(advMenu, text = "" )
+        advMenu.labelYErrVarianceVal = self.LabelLine(advMenu, text = "" )
+        advMenu.entryErrorFile       = self.Entry(advMenu, width = 16)
+
+        adv_handle_test_start   = lambda: self.error_test_start(
+            tested_thing = 'advance',
+            test_win = advMenu
+        )
+        advMenu.buttonTestError = self.Button(advMenu, text = "Start tests",
+                                              command = adv_handle_test_start)
+
+        advMenu.labelPlotValues = self.LabelHeadline(advMenu,
+                                                     text = "Plot values")
+        advMenu.labelPlotError = self.LabelHeadline(advMenu,
+                                                    text = "Plot errors")
+        advMenu.canvasFunction = self.Canvas(advMenu, width=300, height=300)
+        advMenu.canvasError    = self.Canvas(advMenu, width=300, height=300)
+
+        advMenu.entryNumTests   .insert ( 0, '10' )
+        advMenu.entryTestAdvance.insert ( 0, '0.04' )
+        advMenu.entryErrorFile  .insert ( 0, 'test_advance' )
+
+        advMenu.errorTable = []
+
+        adv_table_headers = ('Expected X', 'Expected Y', 'Real X', 'Real Y')
+        # A gui table is created with the right size to accommodate this data,
+        # so adding rows or columns will make the table grow larger
+        adv_table_default_data = np.array(
+            [[0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0]]
+        )
+
+        advMenu.test_value_history = np.zeros((0, 4))
+
+        self.set_error_labels(advMenu, 'advance', adv_table_default_data)
+
+        adv_elabel_col = 0
+        adv_elabel_row = 0
+
+        gm = GridManager(base_col=adv_elabel_col, base_row=adv_elabel_row,
+                             sticky=(N, W), padx=(5, 5))
+
+        gm.grid(advMenu.labelErrors, columnspan=5).down()
+        advMenu.labelErrors.configure(anchor = 'center')
+
+        gm.grid(advMenu.labelNumTests).down()
+        gm.grid(advMenu.labelNumTests).down()
+        gm.grid(advMenu.labelTestAdvance).down()
+        gm.grid(advMenu.labelXMean).down()
+        gm.grid(advMenu.labelXVariance).down()
+        gm.grid(advMenu.labelYMean).down()
+        gm.grid(advMenu.labelYVariance).down()
+        gm.grid(advMenu.labelXErrMean).down()
+        gm.grid(advMenu.labelXErrVariance).down()
+        gm.grid(advMenu.labelYErrMean).down()
+        gm.grid(advMenu.labelYErrVariance).down()
+        gm.grid(advMenu.labelOutFile).down()
+        gm.grid(advMenu.buttonTestError)
+
+        gm.return_base().right().down(2)
+
+        gm.grid(advMenu.entryNumTests).down()
+        gm.grid(advMenu.entryTestAdvance).down()
+        gm.grid(advMenu.labelXMeanVal).down()
+        gm.grid(advMenu.labelXVarianceVal).down()
+        gm.grid(advMenu.labelYMeanVal).down()
+        gm.grid(advMenu.labelYVarianceVal).down()
+        gm.grid(advMenu.labelXErrMeanVal).down()
+        gm.grid(advMenu.labelXErrVarianceVal).down()
+        gm.grid(advMenu.labelYErrMeanVal).down()
+        gm.grid(advMenu.labelYErrVarianceVal).down()
+        gm.grid(advMenu.entryErrorFile)
+
+        gm.down(2) # Two down because of the button to start tests
+
+        gm.right().grid(advMenu.labelPlotError)
+        gm.left(2).grid(advMenu.labelPlotValues).down()
+
+        gm.grid(advMenu.canvasFunction, rowspan=10, columnspan=2).right(2)
+        gm.grid(advMenu.canvasError, rowspan=10, columnspan=3)
+
+
+        # Build a table for expected vs real value
+        adv_etable_col = adv_elabel_col + 3
+        adv_etable_row = adv_elabel_row + 2
+
+
+        adv_theaders, adv_tcells = \
+            self.Table(parent = advMenu,
+                       table_headers = adv_table_headers,
+                       default_data = adv_table_default_data,
+                       start_col = adv_etable_col,
+                       start_row = adv_etable_row)
+
+        advMenu.errorTableHeaders = adv_theaders
+        advMenu.errorTableCells   = adv_tcells
         return win
 
 
