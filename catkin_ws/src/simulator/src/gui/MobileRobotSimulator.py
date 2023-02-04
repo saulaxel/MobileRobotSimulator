@@ -40,20 +40,41 @@ def handle_entry_deg_to_rad(entry):
     angle = entry.get()
 
     angle_deg = None
+    angle_pirad = None
     if angle.endswith('deg'):
         angle_deg = float(angle[:-3])
     elif angle.endswith('d'):
         angle_deg = float(angle[:-1])
+    elif angle.endswith('pi'):
+        angle_pirad = float(angle[:-2])
 
     if angle_deg:
-        angle_rad = self.deg_to_rad(angle_deg)
+        angle_rad = deg_to_rad(angle_deg)
 
-        set_entry(entry, self.format_real(angle_rad))
+        set_entry(entry, format_real(angle_rad))
+    elif angle_pirad:
+        angle_rad = pirad_to_rad(angle_pirad)
+        set_entry(entry, format_real(angle_rad))
 
 
 def register_deg_to_rad_handling(entry):
-    test_angle_handle = lambda: handle_entry_deg_to_rad(entry)
+    test_angle_handle = lambda event: handle_entry_deg_to_rad(entry)
     entry.bind('<Return>', test_angle_handle)
+
+
+def rad_to_deg(rad):
+    return rad * 180.0 / math.pi
+
+
+def deg_to_rad(deg):
+    return deg * math.pi / 180.0
+
+def pirad_to_rad(rad):
+    return rad * math.pi
+
+
+def format_real(val):
+    return '{:.4f}'.format(val)
 
 
 class MobileRobotSimulator(threading.Thread):
@@ -1972,7 +1993,7 @@ class MobileRobotSimulator(threading.Thread):
         # GUI table
         for gui_row, data_row in zip(cells, reversed(data)):
             for gui_cell, cell_data in zip(gui_row, data_row):
-                gui_cell.config(text = self.format_real(cell_data))
+                gui_cell.config(text = format_real(cell_data))
 
 
 
@@ -2101,10 +2122,10 @@ class MobileRobotSimulator(threading.Thread):
 
             for line in self.test_win.test_value_history:
                 first, rest = line[0], line[1:]
-                print(self.format_real(first), end='', file=f)
+                print(format_real(first), end='', file=f)
 
                 for n in rest:
-                    print(' ', self.format_real(n), sep='', end='', file=f)
+                    print(' ', format_real(n), sep='', end='', file=f)
 
                 print(file=f)
 
@@ -2122,28 +2143,28 @@ class MobileRobotSimulator(threading.Thread):
             mean, var = calculate_statistics(data[:,1])
             err_mean, err_var = calculate_errors(data)
 
-            test_win.labelMeanVal.config(text = self.format_real(mean))
-            test_win.labelVarianceVal.config(text = self.format_real(var))
+            test_win.labelMeanVal.config(text = format_real(mean))
+            test_win.labelVarianceVal.config(text = format_real(var))
 
-            test_win.labelErrMeanVal.config(text = self.format_real(err_mean))
-            test_win.labelErrVarianceVal.config(text = self.format_real(err_var))
+            test_win.labelErrMeanVal.config(text = format_real(err_mean))
+            test_win.labelErrVarianceVal.config(text = format_real(err_var))
         else:
             xmean, xvar = calculate_statistics(data[:,2])
             ymean, yvar = calculate_statistics(data[:,3])
             xerr_mean, xerr_var = calculate_errors(data[:,(0,2)])
             yerr_mean, yerr_var = calculate_errors(data[:,(1,3)])
 
-            test_win.labelXMeanVal.config(text = self.format_real(xmean))
-            test_win.labelXVarianceVal.config(text = self.format_real(xvar))
+            test_win.labelXMeanVal.config(text = format_real(xmean))
+            test_win.labelXVarianceVal.config(text = format_real(xvar))
 
-            test_win.labelYMeanVal.config(text = self.format_real(ymean))
-            test_win.labelYVarianceVal.config(text = self.format_real(yvar))
+            test_win.labelYMeanVal.config(text = format_real(ymean))
+            test_win.labelYVarianceVal.config(text = format_real(yvar))
 
-            test_win.labelXErrMeanVal.config(text = self.format_real(xerr_mean))
-            test_win.labelXErrVarianceVal.config(text = self.format_real(xerr_var))
+            test_win.labelXErrMeanVal.config(text = format_real(xerr_mean))
+            test_win.labelXErrVarianceVal.config(text = format_real(xerr_var))
 
-            test_win.labelYErrMeanVal.config(text = self.format_real(yerr_mean))
-            test_win.labelYErrVarianceVal.config(text = self.format_real(yerr_var))
+            test_win.labelYErrMeanVal.config(text = format_real(yerr_mean))
+            test_win.labelYErrVarianceVal.config(text = format_real(yerr_var))
 
 
     def plot_function_and_error(self, data):
@@ -2151,38 +2172,42 @@ class MobileRobotSimulator(threading.Thread):
 
         if self.currently_testing == 'angle':
             self.resetCanvas(test_win.canvasFunction)
-            self.plot_in_canvas(test_win.canvasFunction,
-                                colors=('magenta', 'blue'),
-                                functions=(data[:, 0], data[:, 1]))
+            _, _, diff = self.plot_in_canvas(test_win.canvasFunction,
+                                             colors=('red', 'yellow'),
+                                             functions=(data[:, 0], data[:, 1]))
 
             self.resetCanvas(test_win.canvasError)
             err = data[:, 0] - data[:, 1]
             self.plot_in_canvas(test_win.canvasError,
                                 colors=('red',),
-                                functions=(err,))
+                                functions=(err,),
+                                diff=diff)
         else:
             self.resetCanvas(test_win.canvasFunction)
 
-            self.plot_in_canvas(test_win.canvasFunction,
-                                colors=('green', 'blue', 'violet', 'magenta'),
-                                functions=(data[:, 0], data[:, 1],
-                                           data[:, 2], data[:, 3]))
+            _, _, diff = self.plot_in_canvas(test_win.canvasFunction,
+                                             colors=('red', 'yellow', 'red', 'yellow'),
+                                             functions=(data[:, 0], data[:, 1],
+                                                        data[:, 2], data[:, 3]))
 
             self.resetCanvas(test_win.canvasError)
             X_error = data[:, 0] - data[:, 2]
             Y_error = data[:, 1] - data[:, 3]
             self.plot_in_canvas(test_win.canvasError,
                                 colors=('red', 'orange'),
-                                functions=(X_error, Y_error))
+                                functions=(X_error, Y_error),
+                                diff=diff)
 
 
-    def plot_in_canvas(self, canvas, functions, colors):
+    def plot_in_canvas(self, canvas, functions, colors, diff=None):
         canvas_size = 300
         min_val = float('inf')
         max_val = float('-inf')
         for f in functions:
             min_val = min(min_val, np.min(f))
             max_val = max(max_val, np.max(f))
+
+        center = (min_val + max_val) / 2
 
         # Ensure that the X axis is always shown
         if min_val > 0:
@@ -2191,10 +2216,24 @@ class MobileRobotSimulator(threading.Thread):
         if max_val < 0:
             max_val = 0
 
+        # Managing scale
+        if diff is None:
+            diff = abs(min_val - max_val)
+        else:
+            # Already receive diff, Recalculate min and max
+            print('Diff . . .')
+            print(diff)
+            max_value = center + diff // 2
+            min_value = center - diff // 2
+
         # Add padding above and below
         pad_percent = 10.0
-        diff = abs(min_val - max_val)
+
         pad = diff * pad_percent / 100.0
+
+        # Set a min pad value
+        if pad < 0.01:
+            pad = 0.01
 
         min_val -= pad
         max_val += pad
@@ -2217,20 +2256,11 @@ class MobileRobotSimulator(threading.Thread):
 
                 canvas.create_line(x1, y1, x2, y2, fill=color)
 
-        return min_val, max_val
+        return min_val, max_val, diff
 
 
     def resetCanvas(self, canvas):
         canvas.delete('all')
-
-
-    def rad_to_deg(self, rad):
-        return rad * 180.0 / math.pi
-
-
-    def deg_to_rad(self, deg):
-        return deg * math.pi / 180.0
-
 
 
     def create_errors_subwindow(self, parent):
@@ -2494,10 +2524,6 @@ class MobileRobotSimulator(threading.Thread):
         advMenu.errorTableHeaders = adv_theaders
         advMenu.errorTableCells   = adv_tcells
         return win
-
-
-    def format_real(self, val):
-        return '{:.4f}'.format(val)
 
 
     def run(self):
