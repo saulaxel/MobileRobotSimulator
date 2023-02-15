@@ -2118,7 +2118,7 @@ class MobileRobotSimulator(threading.Thread):
             if self.currently_testing == 'angle':
                 print('Expected Real', file=f)
             else:
-                print('Expected_X Expected_Y Real_X Real_Y')
+                print('Expected_X Expected_Y Real_X Real_Y', file=f)
 
             for line in self.test_win.test_value_history:
                 first, rest = line[0], line[1:]
