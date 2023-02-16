@@ -1874,15 +1874,15 @@ class MobileRobotSimulator(threading.Thread):
 
         # buttons
 
-        self.lableSimulator     .grid(column = 4 ,row = 12  ,sticky = (N, W) ,padx = (5,5))
-        self.buttonRviz   .grid(column = 4 ,row = 14  ,sticky = (N, W) ,padx = (10,5))
-        self.buttonPlotTopological   .grid(column = 4 ,row = 15  ,sticky = (N, W) ,padx = (10,5))
-        self.buttonLastSimulation   .grid(column = 4 ,row = 16  ,sticky = (N, W) ,padx = (10,5))
-        self.buttonRunSimulation.grid(column = 4 ,row = 17 ,sticky = (N, W) ,padx = (10,5))
-        self.buttonStop         .grid(column = 4 ,row = 18 ,sticky = (N, W) ,padx = (10,5))
-        self.labelBattery        .grid(column = 4 ,row = 20 ,sticky = (N, W) ,padx = (10,5))
+        self.lableSimulator        .grid(column = 4 ,row = 12  ,sticky = (N, W) ,padx = (5,5))
+        self.buttonRviz            .grid(column = 4 ,row = 14  ,sticky = (N, W) ,padx = (10,5))
+        self.buttonPlotTopological .grid(column = 4 ,row = 15  ,sticky = (N, W) ,padx = (10,5))
+        self.buttonLastSimulation  .grid(column = 4 ,row = 16  ,sticky = (N, W) ,padx = (10,5))
+        self.buttonRunSimulation   .grid(column = 4 ,row = 17 ,sticky = (N, W) ,padx = (10,5))
+        self.buttonStop            .grid(column = 4 ,row = 18 ,sticky = (N, W) ,padx = (10,5))
+        self.labelBattery          .grid(column = 4 ,row = 20 ,sticky = (N, W) ,padx = (10,5))
         self.batteryBar            .grid(column = 4 ,row = 21 ,sticky = (N, W) ,padx = (10,5))
-        self.labelBattAdvertise .grid(column = 4 ,row = 22 ,sticky = (N, W) ,padx = (20,5))
+        self.labelBattAdvertise    .grid(column = 4 ,row = 22 ,sticky = (N, W) ,padx = (20,5))
 
 
         self.content   .grid(column = 0 ,row = 0 ,sticky = (N, S, E, W))
@@ -2013,23 +2013,23 @@ class MobileRobotSimulator(threading.Thread):
 
         if self.currently_testing == 'angle':
             # Starting angle
-            self.set_zero_angle()
+            self.start_angle = float(self.entryAngle.get())
 
             # Amount of change
             turn_angle = float(test_win.entryTestAngle.get())
 
             # Expected result
-            self.expected_angle = turn_angle
+            self.expected_angle = self.start_angle + turn_angle
 
             # Reset history with size 0 x 4 (expected x and y and real x and y)
-            test_win.test_value_history = np.zeros((0, 2))
+            test_win.test_value_history = np.zeros((0, 4))
         else:
-            self.set_zero_angle()
             # Starting pose
             poseX = float(self.entryPoseX.get())
             poseY = float(self.entryPoseY.get())
             angle = float(self.entryAngle.get())
 
+            self.start_angle = angle
             self.startX = poseX
             self.startY = poseY
 
@@ -2068,29 +2068,33 @@ class MobileRobotSimulator(threading.Thread):
         test_win = self.test_win
         test_type = self.currently_testing
 
-        if self.currently_testing == 'angle':
-            expected = (self.expected_angle, )
-            real = (float(self.entryAngle.get()), )
-            # Single element tuple is used so that we can use the same code
-            # when there are one or multiple expected values
-        else:
-            expected = (self.expectedX, self.expectedY)
-            real = (float(self.entryPoseX.get()), float(self.entryPoseY.get()))
+        if test_type == 'angle':
+            exp_rad = self.expected_angle
+            exp_deg = rad_to_deg(exp_rad)
+            real_rad = float(self.entryAngle.get())
+            real_deg = rad_to_deg(real_rad)
 
-        new_error_pair = expected + real
+            new_data_row = (exp_rad, exp_deg, real_rad, real_deg)
+        else:
+            exp_x = self.expectedX
+            exp_y = self.expectedY
+            real_x = float(self.entryPoseX.get())
+            real_y = float(self.entryPoseY.get())
+
+            new_data_row = (exp_x, exp_y, real_x, real_y)
 
         test_win.test_value_history = \
-            np.vstack((test_win.test_value_history, new_error_pair))
+            np.vstack((test_win.test_value_history, new_data_row))
 
         self.fill_table(test_win.errorTableCells, test_win.test_value_history)
         self.set_error_labels(test_win, test_type, test_win.test_value_history)
         self.plot_function_and_error(test_win.test_value_history)
 
         # Return to the initial state
-        if self.currently_testing == 'angle':
-            self.set_zero_angle()
+        if test_type == 'angle':
+            self.set_angle_directly(self.start_angle)
         else:
-            self.set_zero_angle()
+            self.set_angle_directly(self.start_angle)
             self.set_pose(self.startX, self.startY)
 
         if not self.startFlag:
@@ -2116,7 +2120,7 @@ class MobileRobotSimulator(threading.Thread):
 
         with open(filename, 'w') as f:
             if self.currently_testing == 'angle':
-                print('Expected Real', file=f)
+                print('Expected_Rad Expected_Deg Real_Rad Real_Deg', file=f)
             else:
                 print('Expected_X Expected_Y Real_X Real_Y', file=f)
 
@@ -2173,11 +2177,11 @@ class MobileRobotSimulator(threading.Thread):
         if self.currently_testing == 'angle':
             self.resetCanvas(test_win.canvasFunction)
             _, _, diff = self.plot_in_canvas(test_win.canvasFunction,
-                                             colors=('red', 'yellow'),
-                                             functions=(data[:, 0], data[:, 1]))
+                                             colors=('red', 'blue'),
+                                             functions=(data[:, 0], data[:, 2]))
 
             self.resetCanvas(test_win.canvasError)
-            err = data[:, 0] - data[:, 1]
+            err = data[:, 0] - data[:, 2]
             self.plot_in_canvas(test_win.canvasError,
                                 colors=('red',),
                                 functions=(err,),
@@ -2185,18 +2189,18 @@ class MobileRobotSimulator(threading.Thread):
         else:
             self.resetCanvas(test_win.canvasFunction)
 
-            _, _, diff = self.plot_in_canvas(test_win.canvasFunction,
-                                             colors=('red', 'yellow', 'red', 'yellow'),
-                                             functions=(data[:, 0], data[:, 1],
-                                                        data[:, 2], data[:, 3]))
+            diff = self.plot_in_canvas_xy(test_win.canvasFunction,
+                                          colors=('red', 'blue'),
+                                          functions=(data[:, 0], data[:, 1],
+                                                     data[:, 2], data[:, 3]))
 
             self.resetCanvas(test_win.canvasError)
             X_error = data[:, 0] - data[:, 2]
             Y_error = data[:, 1] - data[:, 3]
-            self.plot_in_canvas(test_win.canvasError,
-                                colors=('red', 'orange'),
-                                functions=(X_error, Y_error),
-                                diff=diff)
+            self.plot_in_canvas_xy(test_win.canvasError,
+                                   colors=('red',),
+                                   functions=(X_error, Y_error),
+                                   diff=diff)
 
 
     def plot_in_canvas(self, canvas, functions, colors, diff=None):
@@ -2221,9 +2225,7 @@ class MobileRobotSimulator(threading.Thread):
             diff = abs(min_val - max_val)
         else:
             # Already receive diff, Recalculate min and max
-            print('Diff . . .')
-            print(diff)
-            max_value = center + diff // 2
+            max_value = center + diff / 2
             min_value = center - diff // 2
 
         # Add padding above and below
@@ -2257,6 +2259,108 @@ class MobileRobotSimulator(threading.Thread):
                 canvas.create_line(x1, y1, x2, y2, fill=color)
 
         return min_val, max_val, diff
+
+
+    def plot_in_canvas_xy(self, canvas, functions, colors, diff=None):
+        canvas_size = 300
+        min_x = float('inf')
+        max_x = float('-inf')
+        min_y = float('inf')
+        max_y = float('-inf')
+
+
+        for f in functions[0::2]:
+            min_x = min(min_x, np.min(f))
+            max_x = max(max_x, np.max(f))
+
+
+        for f in functions[1::2]:
+            min_y = min(min_y, np.min(f))
+            max_y = max(max_y, np.max(f))
+
+
+        center_x = (min_x + max_x) / 2
+        center_y = (min_y + max_y) / 2
+
+        # Ensure that the axis are always shown
+        if min_x > 0:
+            min_x = 0
+
+        if min_y > 0:
+            min_y = 0
+
+        if max_x < 0:
+            max_x = 0
+
+        if max_y < 0:
+            max_y = 0
+
+        # Managing scale
+        if diff is None:
+            diff = max(max_x - min_x, max_y - min_y)
+        else:
+            # Already receive diff, Recalculate min and max
+            max_x = center_x + diff / 2
+            min_x = center_x - diff / 2
+
+            max_y = center_y + diff / 2
+            min_y = center_y - diff / 2
+
+        pad_percent = 10.0
+        pad = diff * pad_percent / 100.0
+
+        # Set a min pad value
+        if pad < 0.01:
+            pad = 0.01
+
+        # Add pad_percent % pad to the axis with the largest values and the
+        # necessary pad to the other axis so that both of them have the same
+        # scale
+        if (max_x - min_x) > (max_y - min_y):
+            min_x -= pad
+            max_x += pad
+
+            ypad = ((max_x - min_x) - (max_y - min_y)) / 2
+            min_y -= ypad
+            max_y += ypad
+        else:
+            min_y -= pad
+            max_y += pad
+
+            xpad = ((max_y - min_y) - (max_x - min_x)) / 2
+            min_x -= xpad
+            max_x += xpad
+
+
+        diff_y = max_y - min_y
+        diff_x = max_x - min_x
+
+        # Reference Axis
+        x_axis = canvas_size - (0 - min_y) * canvas_size / (max_y - min_y)
+        canvas.create_line(0, x_axis, canvas_size, x_axis)
+        y_axis = (0 - min_x) * canvas_size / (max_x - min_x)
+        canvas.create_line(y_axis, 0, y_axis, canvas_size)
+
+
+        length = len(functions[0])
+        x0_canvas = (self.startX - min_x) * canvas_size / diff_x
+        y0_canvas = canvas_size - (self.startY - min_y) * canvas_size / diff_y
+
+        for fx, fy, color in zip(functions[0::2], functions[1::2], colors):
+
+            # Values
+            for x, y, in zip(fx, fy):
+                x1_canvas = (x - min_x) * canvas_size / diff_x
+                y1_canvas = canvas_size - (y - min_y) * canvas_size / diff_y
+
+                canvas.create_line(x0_canvas, y0_canvas, x1_canvas, y1_canvas,
+                                   fill=color)
+
+        if not self.startFlag:
+            print('min_x', min_x, 'max_x', max_x)
+            print('min_y', min_y, 'max_y', max_y)
+
+        return diff
 
 
     def resetCanvas(self, canvas):
@@ -2325,19 +2429,19 @@ class MobileRobotSimulator(threading.Thread):
 
         angMenu.errorTable = []
 
-        ang_table_headers = ('Expected', 'Real')
+        ang_table_headers = ('Expected (Rad)', 'Expected (Deg)', 'Real (Rad)', 'Real (Deg)')
         # A gui table is created with the right size to accommodate this data,
         # so adding rows or columns will make the table grow larger
         ang_table_default_data = np.array(
-            [[0.0, 0.0],
-             [0.0, 0.0],
-             [0.0, 0.0],
-             [0.0, 0.0],
-             [0.0, 0.0],
-             [0.0, 0.0]]
+            [[0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0],
+             [0.0, 0.0, 0.0, 0.0]]
         )
 
-        angMenu.test_value_history = np.zeros((0, 2))
+        angMenu.test_value_history = np.zeros((0, 4))
 
         self.set_error_labels(angMenu, 'angle', ang_table_default_data)
 

@@ -16,9 +16,12 @@ def calculate_statistics(data):
         ...
         n [yn]
     """
+    mean = 0
+    var = 0
     n = data.shape[0]
-    mean = sum(data) / n
-    var = sum((data - mean) ** 2) / n
+    if n != 0:
+        mean = sum(data) / n
+        var = sum((data - mean) ** 2) / n
 
     return mean, var
 
@@ -43,8 +46,14 @@ def calculate_errors(data):
     n = data.shape[0]
     diff = data[:, 0] - data[:, 1]
 
-    err_mean = sum(np.abs(diff)) / n
-    err_var = sum(diff * diff) / (n - 2)
+    err_mean = 0
+    err_var = 0
+
+    if n != 0:
+        err_mean = sum(np.abs(diff)) / n
+
+    if n > 2:
+        err_var = sum(diff * diff) / (n - 2)
 
     return err_mean, err_var
 
