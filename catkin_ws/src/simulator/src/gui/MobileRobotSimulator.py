@@ -632,6 +632,15 @@ class MobileRobotSimulator(threading.Thread):
         self.entryLightY.config(text=str(self.light_y)[:4])
 
 
+    def set_robot_position(self, x, y):
+        if not self.varTurtleBot.get():
+            if self.robot > 0:
+                self.delete_robot()
+            self.robotX = x
+            self.robotY = y
+            self.plot_robot()
+
+
     def right_click(self,event): # Another way to start simulations, by plot the light ( goal point ).
         if not self.startFlag and not self.varTurtleBot.get():
             if self.light >0:
@@ -2633,5 +2642,9 @@ class MobileRobotSimulator(threading.Thread):
     def run(self):
         self.gui_init()
         self.read_map()
+
+        # Place robot in starting position
+        self.set_robot_position(30, 30)
+
         self.plot_robot2()
         self.root.mainloop()
