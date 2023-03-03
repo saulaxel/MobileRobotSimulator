@@ -2,22 +2,44 @@ from linear_interpolator import LinearInterpolator
 
 
 class CanvasCoordinateConverter:
+    """
+    Converts between a cartesian coordinate system and a canvas coordinate
+    system like the one (but not limited to) the one used in tkinter. The
+    important characteristic of this kind of canvas coordinate system is that
+    positive Y grows downward instead of upward, so we have to invert it to
+    match cartesian coordinates
+    """
+
     def __init__(self, x_min, x_max, y_min, y_max,
                  canvas_width, canvas_height):
         self.x_converter = LinearInterpolator(x_min, x_max, 0, canvas_width)
-        # Deals with the inverted y-axis by switching order of canvas_height
-        # and 0
+        # Deals with the inverted y-axis that tkinter has,
+        # by switching order of canvas_height and 0
         self.y_converter = LinearInterpolator(y_min, y_max, canvas_height, 0)
 
 
+    def x_to_canvas(self, x):
+        return self.x_converter.convert(x)
+
+
+    def y_to_canvas(self, y):
+        return self.y_converter.convert(y)
+
+
     def to_canvas(self, x, y):
-        return (self.x_converter.convert(x),
-                self.y_converter.convert(y))
+        return (self.x_to_canvas(x), self.y_to_canvas(y))
+
+
+    def x_to_cartesian(self, cx):
+        return self.x_converter.inverse_convert(cx)
+
+
+    def y_to_cartesian(self, cy):
+        return self.y_converter.inverse_convert(cy)
 
 
     def to_cartesian(self, cx, cy):
-        return (self.x_converter.inverse_convert(cx),
-                self.y_converter.inverse_convert(cy))
+        return (self.x_to_cartesian(cx), self.y_to_cartesian(cy))
 
 
 if __name__ == '__main__':
