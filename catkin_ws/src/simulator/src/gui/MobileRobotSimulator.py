@@ -2466,14 +2466,21 @@ class MobileRobotSimulator(threading.Thread):
         angMenu.labelErrMean     = self.LabelLine(angMenu, text = "Error Mean:")
         angMenu.labelErrVariance = self.LabelLine(angMenu, text = "Error Variance:")
         angMenu.labelFileSuffix  = self.LabelLine(angMenu, text = "File suffix:")
+        angMenu.labelTestStart   = self.LabelLine(angMenu, text = "Test start")
+        angMenu.labelTestEnd     = self.LabelLine(angMenu, text = "Test end")
+        angMenu.labelTestInc     = self.LabelLine(angMenu, text = "Test increment")
 
-        angMenu.entryNumTests       = self.Entry(angMenu)
-        angMenu.entryTestAngle      = self.Entry(angMenu)
-        angMenu.labelMeanVal        = self.LabelLine(angMenu, text = "" )
-        angMenu.labelVarianceVal    = self.LabelLine(angMenu, text = "" )
-        angMenu.labelErrMeanVal     = self.LabelLine(angMenu, text = "" )
-        angMenu.labelErrVarianceVal = self.LabelLine(angMenu, text = "" )
-        angMenu.entryErrorFileSuffix      = self.Entry(angMenu, width = 16)
+        angMenu.entryNumTests        = self.Entry(angMenu)
+        angMenu.entryTestAngle       = self.Entry(angMenu)
+        angMenu.labelMeanVal         = self.LabelLine(angMenu, text = "" )
+        angMenu.labelVarianceVal     = self.LabelLine(angMenu, text = "" )
+        angMenu.labelErrMeanVal      = self.LabelLine(angMenu, text = "" )
+        angMenu.labelErrVarianceVal  = self.LabelLine(angMenu, text = "" )
+        angMenu.entryErrorFileSuffix = self.Entry(angMenu, width = 16)
+        angMenu.checkboxMultiTests   = ttk.Checkbutton(angMenu, text="Multiple tests")
+        angMenu.entryTestStart       = self.Entry(angMenu)
+        angMenu.entryTestEnd         = self.Entry(angMenu)
+        angMenu.entryTestInc         = self.Entry(angMenu)
 
         ang_handle_test_start = lambda: self.error_test_start(
             tested_thing = 'angle',
@@ -2521,16 +2528,20 @@ class MobileRobotSimulator(threading.Thread):
         angMenu.labelErrors.configure(anchor = 'center')
 
         gm.grid(angMenu.labelNumTests).down()
-        gm.grid(angMenu.labelNumTests).down()
         gm.grid(angMenu.labelTestAngle).down()
         gm.grid(angMenu.labelMean).down()
         gm.grid(angMenu.labelVariance).down()
         gm.grid(angMenu.labelErrMean).down()
         gm.grid(angMenu.labelErrVariance).down()
         gm.grid(angMenu.labelFileSuffix).down()
+        gm.grid(angMenu.checkboxMultiTests, columnspan=5).down()
+        gm.grid(angMenu.labelTestStart).down()
+        gm.grid(angMenu.labelTestEnd).down()
+        gm.grid(angMenu.labelTestInc).down()
+
         gm.grid(angMenu.buttonTestError)
 
-        gm.return_base().right().down(2)
+        gm.return_base().right().down()
 
         gm.grid(angMenu.entryNumTests).down()
         gm.grid(angMenu.entryTestAngle).down()
@@ -2538,9 +2549,13 @@ class MobileRobotSimulator(threading.Thread):
         gm.grid(angMenu.labelVarianceVal).down()
         gm.grid(angMenu.labelErrMeanVal).down()
         gm.grid(angMenu.labelErrVarianceVal).down()
-        gm.grid(angMenu.entryErrorFileSuffix)
+        gm.grid(angMenu.entryErrorFileSuffix).down()
+        gm.down() # Skip checkbox place
+        gm.grid(angMenu.entryTestStart).down()
+        gm.grid(angMenu.entryTestEnd).down()
+        gm.grid(angMenu.entryTestInc).down()
 
-        gm.down(2) # Two down because of the button to start tests
+        gm.down(2)
 
         gm.right().grid(angMenu.labelPlotError)
         gm.left(2).grid(angMenu.labelPlotValues).down()
@@ -2551,7 +2566,7 @@ class MobileRobotSimulator(threading.Thread):
 
         # Build a table for expected vs real value
         ang_etable_col = ang_elabel_col + 3
-        ang_etable_row = ang_elabel_row + 2
+        ang_etable_row = ang_elabel_row + 1
 
         ang_theaders, ang_tcells = \
             self.Table(parent = angMenu,
@@ -2563,7 +2578,22 @@ class MobileRobotSimulator(threading.Thread):
         angMenu.errorTableHeaders = ang_theaders
         angMenu.errorTableCells   = ang_tcells
 
-        # Events
+        # Enable/Disable elements depending on mode
+
+        def angle_test_update_widgets():
+            if angMenu.checkboxMultiTests.get():
+                angMenu.entryNumTests["state"] = "disabled"
+                angMenu.entryTestStart["state"] = "enable"
+                angMenu.entryTestEnd["state"] = "enable"
+                angMenu.entryTestInc["state"] = "enable"
+            else:
+                angMenu.entryNumTests["state"] = "enable"
+                angMenu.entryTestStart["state"] = "disabled"
+                angMenu.entryTestEnd["state"] = "disabled"
+                angMenu.entryTestInc["state"] = "disabled"
+
+        self.angle_test_update_widgets = angle_test_update_widgets
+        self.angle_test_update_widgets()
 
         ##### Creating the window for advance testing #####
         advMenu.labelErrors = self.LabelHeadline(advMenu, text = "Angle Error Testing")
@@ -2641,7 +2671,6 @@ class MobileRobotSimulator(threading.Thread):
         advMenu.labelErrors.configure(anchor = 'center')
 
         gm.grid(advMenu.labelNumTests).down()
-        gm.grid(advMenu.labelNumTests).down()
         gm.grid(advMenu.labelTestAdvance).down()
         gm.grid(advMenu.labelXMean).down()
         gm.grid(advMenu.labelXVariance).down()
@@ -2654,7 +2683,7 @@ class MobileRobotSimulator(threading.Thread):
         gm.grid(advMenu.labelFileSuffix).down()
         gm.grid(advMenu.buttonTestError)
 
-        gm.return_base().right().down(2)
+        gm.return_base().right().down(1)
 
         gm.grid(advMenu.entryNumTests).down()
         gm.grid(advMenu.entryTestAdvance).down()
@@ -2676,10 +2705,9 @@ class MobileRobotSimulator(threading.Thread):
         gm.grid(advMenu.canvasFunction, rowspan=10, columnspan=2).right(2)
         gm.grid(advMenu.canvasError, rowspan=10, columnspan=3)
 
-
         # Build a table for expected vs real value
         adv_etable_col = adv_elabel_col + 3
-        adv_etable_row = adv_elabel_row + 2
+        adv_etable_row = adv_elabel_row + 1
 
 
         adv_theaders, adv_tcells = \
