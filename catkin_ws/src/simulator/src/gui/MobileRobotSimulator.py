@@ -1647,10 +1647,17 @@ class MobileRobotSimulator(threading.Thread):
         self.root.title("Mobile Robot Simulator")
 
         self.barMenu = Menu(self.root)
+        self.root.config(menu=self.barMenu )
+
+        self.runMenu = Menu(self.barMenu, tearoff=0)
+        self.barMenu.add_cascade(label=" Run ", menu=self.runMenu,
+                                 background = self.menuButonFontColor )
+        self.runMenu.add_command(label=" Robot Tests ",
+                                 command=self.open_test_window)
+
         self.settingsMenu = Menu(self.barMenu, tearoff=0)
         self.submenuTheme = Menu(self.settingsMenu, tearoff=0)
         self.submenuCanvas = Menu(self.settingsMenu, tearoff=0)
-        self.root.config(menu=self.barMenu )
         self.barMenu.config(background = self.menuColor)
 
 
@@ -1951,6 +1958,13 @@ class MobileRobotSimulator(threading.Thread):
         # Error gui
         self.errors_subwindow = self.create_errors_subwindow(parent=self.root)
 
+        # Hides the subwindow by default so it can be opened using a menu
+        # option.
+        self.close_test_window()
+        # Once open, clicking X will hide it instead of destroying
+        self.errors_subwindow.protocol('WM_DELETE_WINDOW',
+                                       self.close_test_window)
+
 
     def Frame(self, parent, width, height):
         return Frame(parent, borderwidth = 5, relief = "flat",
@@ -2158,13 +2172,15 @@ class MobileRobotSimulator(threading.Thread):
             # instead of meters
             filename_value = int(float(test_win.entryTestAdvance.get()) * 100)
 
+        suffix = test_win.entryErrorFileSuffix.get().strip()
+
         filename = ('{base}/src/data/tests/'
                     '{filename_start}_'
                     '{filename_value}{suffix}.dat').format(
                         base = base,
                         filename_start=filename_start,
                         filename_value=filename_value,
-                        suffix = test_win.entryErrorFileSuffix.get())
+                        suffix = suffix)
 
         with open(filename, 'w') as f:
 
@@ -2412,6 +2428,11 @@ class MobileRobotSimulator(threading.Thread):
     def resetCanvas(self, canvas):
         canvas.delete('all')
 
+    def open_test_window(self):
+        self.errors_subwindow.deiconify()
+
+    def close_test_window(self):
+        self.errors_subwindow.withdraw()
 
     def create_errors_subwindow(self, parent):
         # Toplevel will be treated as new Window
