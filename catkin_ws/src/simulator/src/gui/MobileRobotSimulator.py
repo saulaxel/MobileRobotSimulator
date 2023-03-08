@@ -32,8 +32,15 @@ BEHAVIOUR_TEST_ADVANCE = 20
 
 
 def set_entry(entry, text):
+    initial_state = entry['state']
+    if initial_state != 'normal':
+        entry['state'] = 'normal'
+
     entry.delete ( 0, END )
     entry.insert ( 0, text )
+
+    if initial_state != 'normal':
+        entry['state'] = initial_state
 
 
 def entry_handle_angle(entry):
@@ -1983,11 +1990,12 @@ class MobileRobotSimulator(threading.Thread):
                      foreground = self.titlesColor,
                      font = self.headLineFont)
 
-    def Entry(self, parent, width = 8):
+    def Entry(self, parent, width = 8, **kwargs):
 
         return Entry(parent, width = width,
                      background = self.entrybackgroudColor,
-                     foreground = self.entryforegroundColor)
+                     foreground = self.entryforegroundColor,
+                     **kwargs)
 
     def Button(self, parent, text, command, width = 8):
         return Button(parent, text = text, width = width,
@@ -2050,10 +2058,21 @@ class MobileRobotSimulator(threading.Thread):
             # Starting angle
             self.start_angle = float(self.entryAngle.get())
 
+
             # Amount of change
             # TODO: Use degrees all across the system instead of mixed radians
             # and degrees
             turn_angle = deg_to_rad(float(test_win.entryTestAngle.get()))
+
+            # Base case for recursive multi tests: If turn_angle is greater than
+            # "TestEnd", stop and end right here
+            if test_win.varMultiTests.get():
+                current = float(test_win.entryTestAngle.get())
+                end = float(test_win.entryTestEnd.get())
+
+                if current > end:
+                    self.handle_error_test_end()
+                    return
 
             # Expected result
             self.expected_angle = self.start_angle + turn_angle
@@ -2072,6 +2091,16 @@ class MobileRobotSimulator(threading.Thread):
 
             # Amount of change
             advance = float(test_win.entryTestAdvance.get())
+
+            # Base case for recursive multi tests: If turn_angle is greater than
+            # "TestEnd", stop and end right here
+            if test_win.varMultiTests.get():
+                current = float(test_win.entryTestAdvance.get())
+                end = float(test_win.entryTestEnd.get())
+
+                if current > end:
+                    self.handle_error_test_end()
+                    return
 
             # Expected result
             self.expectedX = poseX + advance * math.cos(angle)
@@ -2136,24 +2165,37 @@ class MobileRobotSimulator(threading.Thread):
             self.set_angle_directly(self.start_angle)
             self.set_pose(self.startX, self.startY)
 
-        if not self.startFlag:
+        if not self.startFlag: # Clean up on last iteration
+            test_win = self.test_win
+            test_type = self.currently_testing
+
+            self.save_test_results(self.currently_testing, self.test_win)
+
             self.handle_error_test_end()
+
+            if test_win.varMultiTests.get():
+                # If multi test is active, increment the test angle and call the
+                # start function recursively once a test has ended so the next
+                # iteration starts
+                current = float(test_win.entryTestAngle.get())
+                increment = float(test_win.entryTestInc.get())
+                current += increment
+                set_entry(test_win.entryTestAngle, current)
+                self.error_test_start(test_type, test_win)
+
 
 
     def handle_error_test_end(self):
+        test_type = self.currently_testing
         # Recovering saved state
         set_entry(self.entryBehavior, self.saved_behaviour)
 
         set_entry(self.entrySteps, self.saved_steps)
 
-        test_type = self.currently_testing
-
         if test_type == 'angle':
             set_entry(self.entryTurnAngle, self.saved_angle)
         else:
             set_entry(self.entryAdvance, self.saved_advance)
-
-        self.save_test_results(test_type, self.test_win)
 
         self.currently_testing = ''
         self.test_win = None
@@ -2165,7 +2207,7 @@ class MobileRobotSimulator(threading.Thread):
         # that will go into such name to integers
         if test_type == 'angle':
             filename_start = 'rotation'
-            filename_value = int(test_win.entryTestAngle.get())
+            filename_value = int(float(test_win.entryTestAngle.get()))
         else:
             filename_start = 'advance'
             # The amount of advance is multiplied by 100 to get centimeters
@@ -2477,8 +2519,14 @@ class MobileRobotSimulator(threading.Thread):
         angMenu.labelErrMeanVal      = self.LabelLine(angMenu, text = "" )
         angMenu.labelErrVarianceVal  = self.LabelLine(angMenu, text = "" )
         angMenu.entryErrorFileSuffix = self.Entry(angMenu, width = 16)
-        angMenu.checkboxMultiTests   = ttk.Checkbutton(angMenu, text="Multiple tests")
-        angMenu.entryTestStart       = self.Entry(angMenu)
+        var = IntVar()
+        angMenu.varMultiTests        = var
+        angMenu.checkboxMultiTests   = ttk.Checkbutton(angMenu,
+                                                       text="Multiple tests",
+                                                       variable=var)
+        angMenu.varTestStart         = DoubleVar()
+        angMenu.entryTestStart       = self.Entry(angMenu,
+                                                  textvariable=angMenu.varTestStart)
         angMenu.entryTestEnd         = self.Entry(angMenu)
         angMenu.entryTestInc         = self.Entry(angMenu)
 
@@ -2498,7 +2546,21 @@ class MobileRobotSimulator(threading.Thread):
         angMenu.canvasError    = self.Canvas(angMenu, width=300, height=300)
 
         angMenu.entryNumTests  .insert ( 0, '100')
-        angMenu.entryTestAngle .insert ( 0, '45')
+        angMenu.entryTestAngle .insert ( 0, '10')
+        angMenu.varTestStart   .set(10)
+        angMenu.entryTestEnd   .insert(0, '90')
+        angMenu.entryTestInc   .insert ( 0, '10')
+
+
+        def follow_test_start():
+            try:
+                angle = angMenu.varTestStart.get()
+                set_entry(angMenu.entryTestAngle, angle)
+            except ValueError:
+                pass # Ignores values that aren't valid numbers
+
+        ang_start_callback = lambda name, index, mode: follow_test_start()
+        angMenu.varTestStart.trace('w', ang_start_callback)
 
         angMenu.errorTable = []
 
@@ -2581,20 +2643,20 @@ class MobileRobotSimulator(threading.Thread):
         # Enable/Disable elements depending on mode
 
         def angle_test_update_widgets():
-            if angMenu.checkboxMultiTests.get():
-                angMenu.entryNumTests["state"] = "disabled"
-                angMenu.entryTestStart["state"] = "enable"
-                angMenu.entryTestEnd["state"] = "enable"
-                angMenu.entryTestInc["state"] = "enable"
+            if angMenu.varMultiTests.get():
+                angMenu.entryTestAngle["state"] = "disabled"
+                angMenu.entryTestStart["state"] = "normal"
+                angMenu.entryTestEnd["state"] = "normal"
+                angMenu.entryTestInc["state"] = "normal"
             else:
-                angMenu.entryNumTests["state"] = "enable"
+                angMenu.entryTestAngle["state"] = "normal"
                 angMenu.entryTestStart["state"] = "disabled"
                 angMenu.entryTestEnd["state"] = "disabled"
                 angMenu.entryTestInc["state"] = "disabled"
 
-        self.angle_test_update_widgets = angle_test_update_widgets
-        self.angle_test_update_widgets()
-
+        angle_test_update_widgets()
+        ang_callback = lambda name, index, mode: angle_test_update_widgets()
+        angMenu.varMultiTests.trace('w', ang_callback)
         ##### Creating the window for advance testing #####
         advMenu.labelErrors = self.LabelHeadline(advMenu, text = "Angle Error Testing")
 
